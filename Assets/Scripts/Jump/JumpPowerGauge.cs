@@ -2,14 +2,12 @@ using UnityEngine;
 
 /// <summary>
 /// 플레이어 오른쪽에 표시되는 점프 파워 게이지입니다.
-/// 게이지 값은 minPower와 maxPower 사이를 왕복하며, 두 번째 점프 버튼 입력 시 LockCurrentPower로 확정됩니다.
+/// 두 번째 점프 버튼을 누르는 동안 정규화 값 0~1 사이를 왕복하며,
+/// 버튼을 뗄 때 JumpTuningConfig의 최소·최대값과 반응 곡선으로 실제 점프 세기를 확정합니다.
 /// </summary>
 public class JumpPowerGauge : MonoBehaviour
 {
-    [Header("Power")]
-    [SerializeField] private float minPower = 7f;
-    [SerializeField] private float maxPower = 16f;
-    [SerializeField] private float cycleDuration = 1.15f;
+    private const float DefaultCycleDuration = 1.15f;
 
     [Header("World Space Visual")]
     [SerializeField] private Vector2 localOffset = new Vector2(0.82f, 0.05f);
@@ -28,10 +26,18 @@ public class JumpPowerGauge : MonoBehaviour
     private Transform visualRoot;
     private SpriteRenderer backgroundRenderer;
     private SpriteRenderer fillRenderer;
+    private JumpTuningConfig tuningConfig;
     private float elapsed;
 
     public float NormalizedValue => normalizedValue;
     public float CurrentPower => currentPower;
+
+    public void SetTuningConfig(JumpTuningConfig config)
+    {
+        tuningConfig = config;
+        currentPower = EvaluatePower(normalizedValue);
+        UpdateVisuals();
+    }
 
     private void Awake()
     {
@@ -46,7 +52,7 @@ public class JumpPowerGauge : MonoBehaviour
         elapsed = 0f;
         locked = false;
         normalizedValue = 0f;
-        currentPower = minPower;
+        currentPower = EvaluatePower(normalizedValue);
 
         SetVisible(true);
         UpdateVisuals();
@@ -60,8 +66,8 @@ public class JumpPowerGauge : MonoBehaviour
         }
 
         elapsed += deltaTime;
-        normalizedValue = Mathf.PingPong(elapsed / Mathf.Max(0.01f, cycleDuration), 1f);
-        currentPower = Mathf.Lerp(minPower, maxPower, normalizedValue);
+        normalizedValue = Mathf.PingPong(elapsed / GetChargeDuration(), 1f);
+        currentPower = EvaluatePower(normalizedValue);
 
         UpdateVisuals();
     }
@@ -69,7 +75,7 @@ public class JumpPowerGauge : MonoBehaviour
     public float LockCurrentPower()
     {
         locked = true;
-        currentPower = Mathf.Lerp(minPower, maxPower, normalizedValue);
+        currentPower = EvaluatePower(normalizedValue);
         UpdateVisuals();
         return currentPower;
     }
@@ -77,6 +83,18 @@ public class JumpPowerGauge : MonoBehaviour
     public void Hide()
     {
         SetVisible(false);
+    }
+
+    private float GetChargeDuration()
+    {
+        return tuningConfig != null ? tuningConfig.GaugeChargeDuration : DefaultCycleDuration;
+    }
+
+    private float EvaluatePower(float gaugeValue)
+    {
+        return tuningConfig != null
+            ? tuningConfig.EvaluateJumpPower(gaugeValue)
+            : Mathf.Lerp(7f, 16f, Mathf.Clamp01(gaugeValue));
     }
 
     private void EnsureVisuals()
@@ -170,11 +188,8 @@ public class JumpPowerGauge : MonoBehaviour
 
     private void OnValidate()
     {
-        minPower = Mathf.Max(0f, minPower);
-        maxPower = Mathf.Max(minPower, maxPower);
-        cycleDuration = Mathf.Max(0.05f, cycleDuration);
         barWidth = Mathf.Max(0.02f, barWidth);
         barHeight = Mathf.Max(0.1f, barHeight);
-        currentPower = Mathf.Lerp(minPower, maxPower, normalizedValue);
+        currentPower = EvaluatePower(normalizedValue);
     }
 }

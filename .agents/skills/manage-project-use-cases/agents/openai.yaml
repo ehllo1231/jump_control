@@ -1,0 +1,4 @@
+interface:
+  display_name: "프로젝트 유스케이스 관리"
+  short_description: "프로젝트 유스케이스 문서를 생성하고 지속적으로 관리"
+  default_prompt: "$manage-project-use-cases를 사용하여 이 요청을 프로젝트 유스케이스로 기록하고 문서를 최신 상태로 유지하세요."

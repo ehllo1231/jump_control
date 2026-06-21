@@ -5,7 +5,8 @@ public enum PlayerJumpState
     Idle,
     PowerGaugeReady,
     Aiming,
-    Jumping
+    Jumping,
+    ChargingPower
 }
 
 /// <summary>
@@ -18,6 +19,7 @@ public enum PlayerJumpState
 [RequireComponent(typeof(JumpPowerGauge))]
 [RequireComponent(typeof(JumpAngleAim))]
 [RequireComponent(typeof(PlayerVisual))]
+[RequireComponent(typeof(BoxCollider2D))]
 public class PlayerController : MonoBehaviour
 {
     [Header("References")]
@@ -27,6 +29,10 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private PlayerJumpMotor jumpMotor;
     [SerializeField] private GroundChecker groundChecker;
     [SerializeField] private PlayerVisual playerVisual;
+    [SerializeField] private BoxCollider2D bodyCollider;
+
+    [Header("Jump Tuning")]
+    [SerializeField] private JumpTuningConfig jumpTuning = new JumpTuningConfig();
 
     [Header("Landing")]
     [SerializeField] private float minimumJumpingTime = 0.08f;
@@ -35,6 +41,8 @@ public class PlayerController : MonoBehaviour
     [Header("Debug")]
     [SerializeField] private PlayerJumpState currentState = PlayerJumpState.Idle;
     [SerializeField] private float lockedPower;
+    [SerializeField] private float lockedJumpAngle;
+    [SerializeField] private Vector2 lockedJumpDirection = Vector2.up;
     [SerializeField] private float lastJumpAngle;
     [SerializeField] private Vector2 lastJumpVector;
 
@@ -45,15 +53,30 @@ public class PlayerController : MonoBehaviour
     public float LockedPower => lockedPower;
     public float LastJumpAngle => lastJumpAngle;
     public Vector2 LastJumpVector => lastJumpVector;
+    public JumpTuningConfig JumpTuning => jumpTuning;
+
+    public void ApplyJumpTuningNow()
+    {
+        CacheReferences();
+        ApplyJumpTuning();
+    }
 
     private void Awake()
     {
         CacheReferences();
+        ApplyJumpTuning();
     }
 
     private void Start()
     {
-        EnterIdle();
+        if (groundChecker.CheckGroundedNow())
+        {
+            EnterIdle();
+        }
+        else
+        {
+            CancelPreparationAndWaitForLanding();
+        }
     }
 
     private void Update()
@@ -73,6 +96,9 @@ public class PlayerController : MonoBehaviour
             case PlayerJumpState.Aiming:
                 UpdateAiming(grounded);
                 break;
+            case PlayerJumpState.ChargingPower:
+                UpdateChargingPower(grounded);
+                break;
             case PlayerJumpState.Jumping:
                 UpdateJumping(grounded);
                 break;
@@ -91,14 +117,12 @@ public class PlayerController : MonoBehaviour
 
         if (inputReader.WasPressed)
         {
-            BeginPowerGauge();
+            BeginAiming();
         }
     }
 
     private void UpdatePowerGaugeReady(bool grounded)
     {
-        powerGauge.TickGauge(Time.deltaTime);
-
         if (!grounded)
         {
             CancelPreparationAndWaitForLanding();
@@ -107,15 +131,34 @@ public class PlayerController : MonoBehaviour
 
         if (inputReader.WasPressed)
         {
-            lockedPower = powerGauge.LockCurrentPower();
-            BeginAiming();
+            lockedJumpAngle = angleAim.CurrentAngle;
+            lockedJumpDirection = angleAim.CurrentDirection;
+            BeginPowerGauge();
+            return;
         }
+
+        angleAim.TickAim(Time.deltaTime);
     }
 
     private void UpdateAiming(bool grounded)
     {
+        if (!grounded)
+        {
+            CancelPreparationAndWaitForLanding();
+            return;
+        }
+
         angleAim.TickAim(Time.deltaTime);
 
+        if (inputReader.WasReleased)
+        {
+            currentState = PlayerJumpState.PowerGaugeReady;
+            playerVisual.SetState(currentState);
+        }
+    }
+
+    private void UpdateChargingPower(bool grounded)
+    {
         if (!grounded)
         {
             CancelPreparationAndWaitForLanding();
@@ -124,8 +167,12 @@ public class PlayerController : MonoBehaviour
 
         if (inputReader.WasReleased)
         {
+            lockedPower = powerGauge.LockCurrentPower();
             ExecuteJump();
+            return;
         }
+
+        powerGauge.TickGauge(Time.deltaTime);
     }
 
     private void UpdateJumping(bool grounded)
@@ -149,24 +196,31 @@ public class PlayerController : MonoBehaviour
 
     private void BeginPowerGauge()
     {
-        currentState = PlayerJumpState.PowerGaugeReady;
+        currentState = PlayerJumpState.ChargingPower;
         powerGauge.BeginGauge();
-        angleAim.Hide();
         playerVisual.SetState(currentState);
     }
 
     private void BeginAiming()
     {
         currentState = PlayerJumpState.Aiming;
+        lockedPower = 0f;
+        lockedJumpAngle = 0f;
+        lockedJumpDirection = Vector2.up;
+        hasLeftGround = false;
+
+        powerGauge.Hide();
         angleAim.BeginAim();
         playerVisual.SetState(currentState);
     }
 
     private void ExecuteJump()
     {
-        Vector2 direction = angleAim.CurrentDirection;
+        Vector2 direction = lockedJumpDirection.sqrMagnitude > 0.0001f
+            ? lockedJumpDirection.normalized
+            : Vector2.up;
 
-        lastJumpAngle = angleAim.CurrentAngle;
+        lastJumpAngle = lockedJumpAngle;
         lastJumpVector = jumpMotor.Jump(lockedPower, direction);
 
         powerGauge.Hide();
@@ -194,6 +248,8 @@ public class PlayerController : MonoBehaviour
     {
         currentState = PlayerJumpState.Idle;
         lockedPower = 0f;
+        lockedJumpAngle = 0f;
+        lockedJumpDirection = Vector2.up;
         hasLeftGround = false;
 
         powerGauge.Hide();
@@ -232,6 +288,42 @@ public class PlayerController : MonoBehaviour
         {
             playerVisual = GetComponent<PlayerVisual>();
         }
+
+        if (bodyCollider == null)
+        {
+            bodyCollider = GetComponent<BoxCollider2D>();
+        }
+    }
+
+    private void ApplyJumpTuning()
+    {
+        if (jumpTuning == null)
+        {
+            jumpTuning = new JumpTuningConfig();
+        }
+
+        jumpTuning.Validate();
+
+        float playerSize = jumpTuning.PlayerSquareSize;
+        if (bodyCollider != null)
+        {
+            bodyCollider.size = Vector2.one * playerSize;
+        }
+
+        if (playerVisual != null)
+        {
+            playerVisual.SetBodySize(playerSize);
+        }
+
+        if (angleAim != null)
+        {
+            angleAim.SetTuningConfig(jumpTuning);
+        }
+
+        if (powerGauge != null)
+        {
+            powerGauge.SetTuningConfig(jumpTuning);
+        }
     }
 
     private void OnValidate()
@@ -239,5 +331,6 @@ public class PlayerController : MonoBehaviour
         minimumJumpingTime = Mathf.Max(0f, minimumJumpingTime);
         landingVerticalSpeedThreshold = Mathf.Max(0f, landingVerticalSpeedThreshold);
         CacheReferences();
+        ApplyJumpTuning();
     }
 }

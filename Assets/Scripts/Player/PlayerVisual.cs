@@ -31,9 +31,10 @@ public class PlayerVisual : MonoBehaviour
 
         switch (state)
         {
-            case PlayerJumpState.PowerGaugeReady:
+            case PlayerJumpState.ChargingPower:
                 bodyRenderer.color = powerReadyColor;
                 break;
+            case PlayerJumpState.PowerGaugeReady:
             case PlayerJumpState.Aiming:
                 bodyRenderer.color = aimingColor;
                 break;
@@ -51,6 +52,16 @@ public class PlayerVisual : MonoBehaviour
         if (bodyRenderer != null && Mathf.Abs(direction.x) > 0.01f)
         {
             bodyRenderer.flipX = direction.x < 0f;
+        }
+    }
+
+    public void SetBodySize(float size)
+    {
+        CacheReferences();
+        if (visualRoot != null)
+        {
+            float safeSize = Mathf.Max(0.1f, size);
+            visualRoot.localScale = new Vector3(safeSize, safeSize, 1f);
         }
     }
 

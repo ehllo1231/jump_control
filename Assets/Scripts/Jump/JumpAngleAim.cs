@@ -6,11 +6,10 @@ using UnityEngine;
 /// </summary>
 public class JumpAngleAim : MonoBehaviour
 {
-    [Header("Angle")]
-    [SerializeField] private float minAngle = -62f;
-    [SerializeField] private float maxAngle = 62f;
-    [SerializeField] private float sweepSpeedDegreesPerSecond = 145f;
-    [SerializeField, Range(0f, 1f)] private float startNormalizedPosition = 0.5f;
+    private const float DefaultMinAngle = -62f;
+    private const float DefaultMaxAngle = 62f;
+    private const float DefaultSweepSpeed = 145f;
+    private const float DefaultStartNormalized = 0.5f;
 
     [Header("World Space Visual")]
     [SerializeField] private Vector2 localOffset = new Vector2(0f, 0.86f);
@@ -27,6 +26,7 @@ public class JumpAngleAim : MonoBehaviour
     private SpriteRenderer shaftRenderer;
     private SpriteRenderer headLeftRenderer;
     private SpriteRenderer headRightRenderer;
+    private JumpTuningConfig tuningConfig;
     private float normalizedPosition;
     private int sweepDirection = 1;
 
@@ -41,6 +41,13 @@ public class JumpAngleAim : MonoBehaviour
         }
     }
 
+    public void SetTuningConfig(JumpTuningConfig config)
+    {
+        tuningConfig = config;
+        UpdateCurrentAngle();
+        UpdateVisuals();
+    }
+
     private void Awake()
     {
         EnsureVisuals();
@@ -51,7 +58,7 @@ public class JumpAngleAim : MonoBehaviour
     {
         EnsureVisuals();
 
-        normalizedPosition = Mathf.Clamp01(startNormalizedPosition);
+        normalizedPosition = GetStartNormalizedPosition();
         sweepDirection = normalizedPosition >= 1f ? -1 : 1;
         UpdateCurrentAngle();
 
@@ -61,8 +68,10 @@ public class JumpAngleAim : MonoBehaviour
 
     public void TickAim(float deltaTime)
     {
+        float minAngle = GetMinAngle();
+        float maxAngle = GetMaxAngle();
         float angleRange = Mathf.Max(1f, maxAngle - minAngle);
-        normalizedPosition += sweepDirection * (sweepSpeedDegreesPerSecond / angleRange) * deltaTime;
+        normalizedPosition += sweepDirection * (GetSweepSpeed() / angleRange) * deltaTime;
 
         if (normalizedPosition >= 1f)
         {
@@ -86,7 +95,27 @@ public class JumpAngleAim : MonoBehaviour
 
     private void UpdateCurrentAngle()
     {
-        currentAngle = Mathf.Lerp(minAngle, maxAngle, normalizedPosition);
+        currentAngle = Mathf.Lerp(GetMinAngle(), GetMaxAngle(), normalizedPosition);
+    }
+
+    private float GetMinAngle()
+    {
+        return tuningConfig != null ? tuningConfig.MinDirectionAngle : DefaultMinAngle;
+    }
+
+    private float GetMaxAngle()
+    {
+        return tuningConfig != null ? tuningConfig.MaxDirectionAngle : DefaultMaxAngle;
+    }
+
+    private float GetSweepSpeed()
+    {
+        return tuningConfig != null ? tuningConfig.DirectionSweepSpeed : DefaultSweepSpeed;
+    }
+
+    private float GetStartNormalizedPosition()
+    {
+        return tuningConfig != null ? tuningConfig.DirectionStartNormalized : DefaultStartNormalized;
     }
 
     private void EnsureVisuals()
@@ -185,14 +214,6 @@ public class JumpAngleAim : MonoBehaviour
 
     private void OnValidate()
     {
-        if (maxAngle < minAngle)
-        {
-            float temporary = minAngle;
-            minAngle = maxAngle;
-            maxAngle = temporary;
-        }
-
-        sweepSpeedDegreesPerSecond = Mathf.Max(1f, sweepSpeedDegreesPerSecond);
         arrowLength = Mathf.Max(0.1f, arrowLength);
         shaftWidth = Mathf.Max(0.01f, shaftWidth);
         headLength = Mathf.Max(0.05f, headLength);
