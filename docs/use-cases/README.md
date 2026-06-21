@@ -2,7 +2,24 @@
 
 프로젝트 유스케이스를 구현 코드와 분리하여 관리한다.
 
+ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. 예를 들어 `UC-003-01`부터 `UC-003-08`까지는 맵 제작 도구 관련 세부 유스케이스다.
+
 | ID | 제목 | 상태 | 문서 | 갱신일 |
 | --- | --- | --- | --- | --- |
 | UC-001 | 사용자 점프 | Implemented | [문서](./UC-001-player-jump.md) | 2026-06-21 |
-| UC-002 | 실시간 점프 튜닝 | Implemented | [문서](./UC-002-live-jump-tuning.md) | 2026-06-21 |
+| UC-002 | 실시간 점프 튜닝 기능군 | Superseded | [문서](./UC-002-live-jump-tuning.md) | 2026-06-21 |
+| UC-002-01 | 점프 튜닝 대상 선택 | Implemented | [문서](./UC-002-01-select-jump-tuning-target.md) | 2026-06-21 |
+| UC-002-02 | 플레이어 크기 튜닝 | Implemented | [문서](./UC-002-02-tune-player-size.md) | 2026-06-21 |
+| UC-002-03 | 점프 방향 튜닝 | Implemented | [문서](./UC-002-03-tune-jump-direction.md) | 2026-06-21 |
+| UC-002-04 | 점프 파워 튜닝 | Implemented | [문서](./UC-002-04-tune-jump-power.md) | 2026-06-21 |
+| UC-002-05 | Play Mode 튜닝 값 유지 | Implemented | [문서](./UC-002-05-persist-play-mode-tuning.md) | 2026-06-21 |
+| UC-002-06 | 코드 수정 중 튜닝 값 보존 | Implemented | [문서](./UC-002-06-preserve-manual-tuning-values.md) | 2026-06-21 |
+| UC-003 | 2D 점프 맵 제작 툴 기능군 | Superseded | [문서](./UC-003-map-authoring-tool.md) | 2026-06-21 |
+| UC-003-01 | Platform 생성 및 크기 조정 | Implemented | [문서](./UC-003-01-create-and-size-platform.md) | 2026-06-21 |
+| UC-003-02 | 기존 오브젝트를 Platform으로 변환 | Implemented | [문서](./UC-003-02-convert-selected-platform.md) | 2026-06-21 |
+| UC-003-03 | 선택한 두 Platform 거리 표시 | Implemented | [문서](./UC-003-03-measure-selected-platforms.md) | 2026-06-21 |
+| UC-003-04 | 선택 Platform에서 플레이 테스트 시작 | Implemented | [문서](./UC-003-04-start-playtest-from-platform.md) | 2026-06-21 |
+| UC-003-05 | Play Mode 생성 Platform 유지 | Implemented | [문서](./UC-003-05-persist-play-mode-platforms.md) | 2026-06-21 |
+| UC-003-06 | 점프 도달 후보 표시 | Implemented | [문서](./UC-003-06-show-jump-reachability.md) | 2026-06-21 |
+| UC-003-07 | 기본 Platform 색상 일관성 유지 | Implemented | [문서](./UC-003-07-keep-platform-color-consistent.md) | 2026-06-21 |
+| UC-003-08 | 코드 수정 중 사용자 맵 구성 보존 | Implemented | [문서](./UC-003-08-preserve-user-map-edits.md) | 2026-06-21 |

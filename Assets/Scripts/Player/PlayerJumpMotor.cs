@@ -20,6 +20,9 @@ public class PlayerJumpMotor : MonoBehaviour
 
     public Vector2 LastAppliedImpulse => lastAppliedImpulse;
     public float VerticalVelocity => body != null ? body.linearVelocity.y : 0f;
+    public float ImpulseMultiplier => Mathf.Max(0f, impulseMultiplier);
+    public bool ClearVelocityBeforeJump => clearVelocityBeforeJump;
+    public bool KeepHorizontalVelocityOnJump => keepHorizontalVelocityOnJump;
 
     private void Awake()
     {

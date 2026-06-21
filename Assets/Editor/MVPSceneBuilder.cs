@@ -16,6 +16,7 @@ public static class MVPSceneBuilder
     private const string WhiteSpritePath = "Assets/Sprites/MVPWhiteSquare.png";
     private const string PlayerPhysicsPath = "Assets/Materials/MVPPlayerPhysics.physicsMaterial2D";
     private const string PlatformPhysicsPath = "Assets/Materials/MVPPlatformPhysics.physicsMaterial2D";
+    private static readonly Color PlatformColor = new Color(0.22f, 0.24f, 0.27f);
 
     [MenuItem("Tools/Jump Timing/Build MVP Scene")]
     public static void BuildMVPScene()
@@ -33,12 +34,12 @@ public static class MVPSceneBuilder
         GameObject player = CreatePlayer(whiteSprite, playerPhysics);
         GameObject platformPrefab = CreatePlatformPrefab(whiteSprite, platformPhysics);
 
-        CreatePlatformInstance(platformPrefab, "Floor", new Vector2(0f, -1f), new Vector2(24f, 0.45f), new Color(0.18f, 0.2f, 0.22f));
-        CreatePlatformInstance(platformPrefab, "Platform_01", new Vector2(2.35f, 0.9f), new Vector2(2.6f, 0.32f), new Color(0.22f, 0.26f, 0.3f));
-        CreatePlatformInstance(platformPrefab, "Platform_02", new Vector2(-1.7f, 2.55f), new Vector2(2.25f, 0.32f), new Color(0.25f, 0.28f, 0.32f));
-        CreatePlatformInstance(platformPrefab, "Platform_03", new Vector2(3.4f, 4.15f), new Vector2(2.15f, 0.32f), new Color(0.22f, 0.28f, 0.26f));
-        CreatePlatformInstance(platformPrefab, "Platform_04", new Vector2(-3.0f, 5.75f), new Vector2(2.35f, 0.32f), new Color(0.28f, 0.25f, 0.31f));
-        CreatePlatformInstance(platformPrefab, "Platform_05", new Vector2(0.85f, 7.25f), new Vector2(2.6f, 0.32f), new Color(0.3f, 0.27f, 0.23f));
+        CreatePlatformInstance(platformPrefab, "Floor", new Vector2(0f, -1f), new Vector2(24f, 0.45f));
+        CreatePlatformInstance(platformPrefab, "Platform_01", new Vector2(2.35f, 0.9f), new Vector2(2.6f, 0.32f));
+        CreatePlatformInstance(platformPrefab, "Platform_02", new Vector2(-1.7f, 2.55f), new Vector2(2.25f, 0.32f));
+        CreatePlatformInstance(platformPrefab, "Platform_03", new Vector2(3.4f, 4.15f), new Vector2(2.15f, 0.32f));
+        CreatePlatformInstance(platformPrefab, "Platform_04", new Vector2(-3.0f, 5.75f), new Vector2(2.35f, 0.32f));
+        CreatePlatformInstance(platformPrefab, "Platform_05", new Vector2(0.85f, 7.25f), new Vector2(2.6f, 0.32f));
 
         CreateCamera(player.transform);
 
@@ -104,6 +105,12 @@ public static class MVPSceneBuilder
             importer.spritePixelsPerUnit = 16f;
             importer.filterMode = FilterMode.Point;
             importer.textureCompression = TextureImporterCompression.Uncompressed;
+
+            TextureImporterSettings importerSettings = new TextureImporterSettings();
+            importer.ReadTextureSettings(importerSettings);
+            importerSettings.spriteMeshType = SpriteMeshType.FullRect;
+            importer.SetTextureSettings(importerSettings);
+
             importer.SaveAndReimport();
         }
 
@@ -185,18 +192,21 @@ public static class MVPSceneBuilder
         GameObject platform = new GameObject("Platform");
         SpriteRenderer renderer = platform.AddComponent<SpriteRenderer>();
         renderer.sprite = sprite;
-        renderer.color = new Color(0.22f, 0.24f, 0.27f);
+        renderer.color = PlatformColor;
         renderer.sortingOrder = 0;
 
         BoxCollider2D collider = platform.AddComponent<BoxCollider2D>();
         collider.sharedMaterial = physicsMaterial;
+
+        Platform2D platform2D = platform.AddComponent<Platform2D>();
+        platform2D.SetSize(1f, 1f);
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(platform, PlatformPrefabPath);
         Object.DestroyImmediate(platform);
         return prefab;
     }
 
-    private static void CreatePlatformInstance(GameObject prefab, string name, Vector2 position, Vector2 scale, Color color)
+    private static void CreatePlatformInstance(GameObject prefab, string name, Vector2 position, Vector2 scale)
     {
         GameObject platform = PrefabUtility.InstantiatePrefab(prefab) as GameObject;
         if (platform == null)
@@ -206,12 +216,19 @@ public static class MVPSceneBuilder
 
         platform.name = name;
         platform.transform.position = position;
-        platform.transform.localScale = new Vector3(scale.x, scale.y, 1f);
+        platform.transform.localScale = Vector3.one;
+
+        Platform2D platform2D = platform.GetComponent<Platform2D>();
+        if (platform2D == null)
+        {
+            platform2D = platform.AddComponent<Platform2D>();
+        }
+        platform2D.SetSize(scale.x, scale.y);
 
         SpriteRenderer renderer = platform.GetComponent<SpriteRenderer>();
         if (renderer != null)
         {
-            renderer.color = color;
+            renderer.color = PlatformColor;
         }
     }
 
