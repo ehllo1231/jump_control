@@ -81,6 +81,8 @@ public class JumpTuningWindow : EditorWindow
         EditorGUI.BeginChangeCheck();
         DrawPlayerSettings(tuningProperty);
         EditorGUILayout.Space(10f);
+        DrawCollisionSettings(tuningProperty);
+        EditorGUILayout.Space(10f);
         DrawDirectionSettings(tuningProperty);
         EditorGUILayout.Space(10f);
         DrawPowerGaugeSettings(tuningProperty);
@@ -137,6 +139,18 @@ public class JumpTuningWindow : EditorWindow
     {
         EditorGUILayout.LabelField("Player Body", EditorStyles.boldLabel);
         DrawProperty(tuningProperty, "playerSquareSize", "Player Square Size");
+    }
+
+    private static void DrawCollisionSettings(SerializedProperty tuningProperty)
+    {
+        EditorGUILayout.LabelField("Collision", EditorStyles.boldLabel);
+        DrawProperty(tuningProperty, "wallBounceElasticity", "Wall Bounce Elasticity");
+        DrawProperty(tuningProperty, "wallBounceVerticalVelocityMode", "Wall Bounce Vertical Mode");
+
+        EditorGUILayout.HelpBox(
+            "Wall Bounce Elasticity는 벽에 부딪혔을 때만 가로 방향으로 되돌리는 비율입니다. " +
+            "Vertical Mode는 충돌 직전 Y 속도를 보존할지, 기존처럼 충돌 처리 후 현재 Y 속도를 사용할지 결정합니다.",
+            MessageType.None);
     }
 
     private static void DrawDirectionSettings(SerializedProperty tuningProperty)

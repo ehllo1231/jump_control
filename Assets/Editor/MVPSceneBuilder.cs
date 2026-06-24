@@ -1,8 +1,10 @@
+using System;
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Object = UnityEngine.Object;
 
 /// <summary>
 /// 비어 있는 Unity 프로젝트에서도 메뉴 클릭 한 번으로 MVP 테스트 씬과 프리팹을 생성합니다.
@@ -11,9 +13,11 @@ using UnityEngine.SceneManagement;
 public static class MVPSceneBuilder
 {
     private const string ScenePath = "Assets/Scenes/MVPJumpScene.unity";
+    private const string AllowSceneOverwriteArgument = "-jumpTimingAllowSceneOverwrite";
     private const string PlayerPrefabPath = "Assets/Prefabs/Player.prefab";
     private const string PlatformPrefabPath = "Assets/Prefabs/Platform.prefab";
     private const string WhiteSpritePath = "Assets/Sprites/MVPWhiteSquare.png";
+    private const string MusicClipPath = "Assets/music/first_castle.mp3";
     private const string PlayerPhysicsPath = "Assets/Materials/MVPPlayerPhysics.physicsMaterial2D";
     private const string PlatformPhysicsPath = "Assets/Materials/MVPPlatformPhysics.physicsMaterial2D";
     private static readonly Color PlatformColor = new Color(0.22f, 0.24f, 0.27f);
@@ -21,6 +25,22 @@ public static class MVPSceneBuilder
     [MenuItem("Tools/Jump Timing/Build MVP Scene")]
     public static void BuildMVPScene()
     {
+        if (!CanBuildMVPScene())
+        {
+            Debug.LogWarning("Build MVP Scene은 Play Mode에서 실행할 수 없습니다. Edit Mode로 돌아간 뒤 실행하세요.");
+            return;
+        }
+
+        if (!ConfirmSceneReplacement())
+        {
+            return;
+        }
+
+        if (!BackupExistingSceneBeforeReplacement())
+        {
+            return;
+        }
+
         EnsureFolders();
 
         Sprite whiteSprite = CreateWhiteSprite();
@@ -42,6 +62,7 @@ public static class MVPSceneBuilder
         CreatePlatformInstance(platformPrefab, "Platform_05", new Vector2(0.85f, 7.25f), new Vector2(2.6f, 0.32f));
 
         CreateCamera(player.transform);
+        CreateBackgroundMusic();
 
         PrefabUtility.SaveAsPrefabAssetAndConnect(player, PlayerPrefabPath, InteractionMode.AutomatedAction);
 
@@ -54,6 +75,75 @@ public static class MVPSceneBuilder
         {
             EditorUtility.DisplayDialog("MVP Scene Built", "Assets/Scenes/MVPJumpScene.unity 생성 완료. 씬을 열고 Play를 누르면 Space 키로 테스트할 수 있습니다.", "OK");
         }
+    }
+
+    [MenuItem("Tools/Jump Timing/Build MVP Scene", true)]
+    private static bool CanBuildMVPScene()
+    {
+        return !Application.isPlaying;
+    }
+
+    private static bool ConfirmSceneReplacement()
+    {
+        if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+        {
+            return false;
+        }
+
+        if (!File.Exists(ScenePath))
+        {
+            return true;
+        }
+
+        if (Application.isBatchMode)
+        {
+            if (HasCommandLineArgument(AllowSceneOverwriteArgument))
+            {
+                return true;
+            }
+
+            Debug.LogWarning(
+                $"Build MVP Scene skipped because {ScenePath} already exists. " +
+                $"Pass {AllowSceneOverwriteArgument} only when overwriting the user map is intentional.");
+            return false;
+        }
+
+        return EditorUtility.DisplayDialog(
+            "Replace MVP Scene?",
+            $"{ScenePath}를 기본 샘플 씬으로 다시 저장합니다. 현재 맵 구성이 대체될 수 있습니다.",
+            "Replace",
+            "Cancel");
+    }
+
+    private static bool BackupExistingSceneBeforeReplacement()
+    {
+        if (!File.Exists(ScenePath))
+        {
+            return true;
+        }
+
+        string backupPath = MapSceneBackupUtility.CreateBackupForScenePath(ScenePath, "before-mvp-rebuild");
+        if (!string.IsNullOrEmpty(backupPath))
+        {
+            return true;
+        }
+
+        Debug.LogError($"Build MVP Scene aborted because a backup could not be created for {ScenePath}.");
+        return false;
+    }
+
+    private static bool HasCommandLineArgument(string argument)
+    {
+        string[] args = Environment.GetCommandLineArgs();
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (string.Equals(args[i], argument, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void EnsureFolders()
@@ -250,6 +340,26 @@ public static class MVPSceneBuilder
         SetVector3(follow, "offset", new Vector3(0f, 1.6f, -10f));
         SetFloat(follow, "smoothTime", 0.16f);
         SetFloat(follow, "minY", 0.25f);
+    }
+
+    private static void CreateBackgroundMusic()
+    {
+        AudioClip musicClip = AssetDatabase.LoadAssetAtPath<AudioClip>(MusicClipPath);
+        if (musicClip == null)
+        {
+            Debug.LogWarning($"{MusicClipPath}를 찾지 못해 배경 음악 오브젝트를 생성하지 않았습니다.");
+            return;
+        }
+
+        GameObject musicObject = new GameObject("Background Music");
+        AudioSource audioSource = musicObject.AddComponent<AudioSource>();
+        audioSource.clip = musicClip;
+        audioSource.playOnAwake = false;
+        audioSource.loop = false;
+        audioSource.spatialBlend = 0f;
+
+        BackgroundMusicLoop musicLoop = musicObject.AddComponent<BackgroundMusicLoop>();
+        musicLoop.Configure(musicClip, 0.75f, 3f);
     }
 
     private static void AddSceneToBuildSettings(string scenePath)

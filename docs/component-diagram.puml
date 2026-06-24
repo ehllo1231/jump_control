@@ -1,0 +1,175 @@
+@startuml JumpTimingComponentDiagram
+title Jump Timing Game - Component Diagram
+
+left to right direction
+
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+skinparam note {
+  BackgroundColor #FFF8DC
+  BorderColor #A58A35
+}
+
+actor "Player" as Player
+actor "Map Designer\n(Unity Editor)" as Designer
+
+package "Unity Runtime" as Runtime {
+  artifact "Assets/Scenes/MVPJumpScene.unity" as MVPScene
+  artifact "Assets/Prefabs/Player.prefab" as PlayerPrefab
+  artifact "Assets/Prefabs/Platform.prefab" as PlatformPrefab
+
+  package "Player Runtime" as PlayerRuntime {
+    component "PlayerController\n<<MonoBehaviour>>" as PlayerController
+    component "JumpInputReader\n<<MonoBehaviour>>" as JumpInputReader
+    component "PlayerJumpMotor\n<<MonoBehaviour>>" as PlayerJumpMotor
+    component "GroundChecker\n<<MonoBehaviour>>" as GroundChecker
+    component "PlayerVisual\n<<MonoBehaviour>>" as PlayerVisual
+  }
+
+  package "Jump Runtime" as JumpRuntime {
+    component "JumpAngleAim\n<<MonoBehaviour>>" as JumpAngleAim
+    component "JumpPowerGauge\n<<MonoBehaviour>>" as JumpPowerGauge
+    component "JumpTuningConfig\n<<Serializable>>" as JumpTuningConfig
+  }
+
+  package "Map Runtime" as MapRuntime {
+    interface "IPlatformSurface" as IPlatformSurface
+    component "Platform2D\n<<MonoBehaviour>>" as Platform2D
+  }
+
+  component "SimpleCameraFollow\n<<MonoBehaviour>>" as SimpleCameraFollow
+}
+
+package "Unity Editor Tooling" as EditorTooling {
+  package "Scene/Prefab Bootstrap" as BootstrapTools {
+    component "MVPSceneBuilder" as MVPSceneBuilder
+    component "MVPSceneAutoLoader" as MVPSceneAutoLoader
+  }
+
+  package "Jump Tuning Tools" as JumpTuningTools {
+    component "JumpTuningWindow\n<<EditorWindow>>" as JumpTuningWindow
+    component "JumpTuningPlayModePersistence" as JumpTuningPlayModePersistence
+  }
+
+  package "Map Authoring Tools" as MapTools {
+    component "MapBuilderWindow\n<<EditorWindow>>" as MapBuilderWindow
+    component "MapBuilderPlayModePersistence" as MapBuilderPlayModePersistence
+    component "MapPlaytestLauncher" as MapPlaytestLauncher
+    component "Platform2DEditor\n<<CustomEditor>>" as Platform2DEditor
+    component "PlatformSceneOverlay" as PlatformSceneOverlay
+    component "PlatformMeasurementUtility" as PlatformMeasurementUtility
+    component "JumpReachabilityOverlay" as JumpReachabilityOverlay
+    component "PlayerScenePositionHandle" as PlayerScenePositionHandle
+  }
+}
+
+package "Unity APIs" as UnityApis {
+  component "UnityEngine" as UnityEngine
+  component "UnityEditor" as UnityEditor
+  component "Physics2D / Rigidbody2D\nCollider2D / SpriteRenderer" as Unity2D
+  component "SceneView / Handles\nSelection / SessionState" as UnityEditorServices
+}
+
+Player --> JumpInputReader : space key or external held state
+Designer --> MapBuilderWindow : create, convert, rotate platforms
+Designer --> JumpTuningWindow : edit live jump tuning
+Designer --> Platform2DEditor : inspect size/shape/vertices
+Designer --> JumpReachabilityOverlay : inspect reachable platforms
+Designer --> MapPlaytestLauncher : start from selected platform
+
+MVPScene --> PlayerPrefab : contains Player instance
+MVPScene --> PlatformPrefab : contains Platform instances
+PlayerPrefab *-- PlayerController
+PlayerPrefab *-- JumpInputReader
+PlayerPrefab *-- PlayerJumpMotor
+PlayerPrefab *-- GroundChecker
+PlayerPrefab *-- PlayerVisual
+PlayerPrefab *-- JumpAngleAim
+PlayerPrefab *-- JumpPowerGauge
+PlatformPrefab *-- Platform2D
+
+PlayerController *-- JumpTuningConfig : owns serialized tuning
+PlayerController --> JumpInputReader : Tick(), WasPressed, WasReleased
+PlayerController --> JumpAngleAim : BeginAim(), TickAim(), CurrentDirection
+PlayerController --> JumpPowerGauge : BeginGauge(), TickGauge(), LockCurrentPower()
+PlayerController --> PlayerJumpMotor : Jump(), wall bounce tuning
+PlayerController --> GroundChecker : CheckGroundedNow()
+PlayerController --> PlayerVisual : SetState(), OnJump(), SetBodySize()
+JumpAngleAim --> JumpTuningConfig : direction range and sweep speed
+JumpPowerGauge --> JumpTuningConfig : charge duration and power curve
+PlayerJumpMotor --> Unity2D : impulse jump and wall bounce physics
+GroundChecker --> Unity2D : foot overlap checks
+PlayerVisual --> Unity2D : renderer/collider alignment
+JumpInputReader --> UnityEngine : keyboard input adapter
+SimpleCameraFollow --> PlayerController : follows player transform
+
+Platform2D ..|> IPlatformSurface
+Platform2D --> Unity2D : rectangle or triangle collider/visual sync
+GroundChecker ..> Platform2D : detects platform colliders at feet
+
+MVPSceneBuilder --> MVPScene : creates/saves sample scene
+MVPSceneBuilder --> PlayerPrefab : creates Player prefab
+MVPSceneBuilder --> PlatformPrefab : creates Platform prefab
+MVPSceneBuilder --> PlayerController : wires runtime components
+MVPSceneBuilder --> Platform2D : creates platform instances
+MVPSceneBuilder --> SimpleCameraFollow : creates follow camera
+MVPSceneBuilder --> UnityEditor : AssetDatabase, PrefabUtility, EditorSceneManager
+MVPSceneAutoLoader --> MVPSceneBuilder : builds missing MVP scene
+MVPSceneAutoLoader --> MVPScene : opens default scene
+
+JumpTuningWindow --> PlayerController : edits JumpTuningConfig serialized field
+JumpTuningWindow --> JumpTuningPlayModePersistence : store/apply play-mode changes
+JumpTuningPlayModePersistence --> PlayerController : locate target and apply tuning
+JumpTuningPlayModePersistence --> UnityEditorServices : SessionState and GlobalObjectId
+
+MapBuilderWindow --> PlatformPrefab : instantiate new platforms
+MapBuilderWindow --> Platform2D : set shape, size, rotation
+MapBuilderWindow --> MapPlaytestLauncher : start selected-platform test
+MapBuilderWindow --> JumpReachabilityOverlay : toggle reachability view
+MapBuilderWindow --> MapBuilderPlayModePersistence : track play-mode platforms
+MapBuilderPlayModePersistence --> Platform2D : snapshot and recreate platforms
+MapBuilderPlayModePersistence --> PlatformPrefab : instantiate persisted snapshots
+MapBuilderPlayModePersistence --> UnityEditorServices : SessionState snapshots
+MapPlaytestLauncher --> Platform2D : read TopCenter spawn point
+MapPlaytestLauncher --> PlayerController : place and retune player
+MapPlaytestLauncher --> Unity2D : reset Rigidbody2D and sync transforms
+
+Platform2DEditor --> Platform2D : edit size, shape, rotation, triangle vertices
+Platform2DEditor --> UnityEditorServices : Inspector and SceneView handles
+PlatformSceneOverlay --> PlatformMeasurementUtility : measure selected surfaces
+PlatformMeasurementUtility --> IPlatformSurface : uses TopCenter contract
+PlatformSceneOverlay --> Platform2D : selected platform surfaces
+JumpReachabilityOverlay --> PlayerController : current position and tuning
+JumpReachabilityOverlay --> PlayerJumpMotor : impulse and wall-bounce settings
+JumpReachabilityOverlay --> JumpTuningConfig : sample angles and powers
+JumpReachabilityOverlay --> Platform2D : candidate landing segments
+JumpReachabilityOverlay --> Unity2D : BoxCast trajectory collision preview
+JumpReachabilityOverlay --> UnityEditorServices : SceneView drawing and editor prefs
+PlayerScenePositionHandle --> PlayerController : move player root in Scene View
+
+Runtime --> UnityEngine
+EditorTooling --> UnityEditor
+UnityEditor --> UnityEngine
+
+note right of PlayerController
+Central jump state machine:
+Idle -> Aiming -> PowerGaugeReady -> ChargingPower -> Jumping.
+It coordinates collaborators and keeps input, physics,
+visuals, and tuning responsibilities separated.
+end note
+
+note right of Platform2D
+Single runtime map component for rectangle and triangle platforms.
+It keeps visual size, collider data, top-surface measurements,
+and editor-facing shape data in sync.
+end note
+
+note bottom of JumpReachabilityOverlay
+Editor-only preview. It samples tuning ranges and predicts
+trajectories against scene colliders without taking over
+the runtime jump controller.
+end note
+
+@enduml

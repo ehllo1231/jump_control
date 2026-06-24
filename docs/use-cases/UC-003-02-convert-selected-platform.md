@@ -1,7 +1,7 @@
 # UC-003-02: 기존 오브젝트를 Platform으로 변환
 
 - 상태: Implemented
-- 마지막 갱신일: 2026-06-21
+- 마지막 갱신일: 2026-06-22
 
 ## 목적
 
@@ -15,6 +15,7 @@
 ## 사전 조건
 
 - Unity Editor에서 맵 씬이 열려 있어야 한다.
+- Unity Editor가 Edit Mode여야 한다.
 - 선택된 오브젝트에 SpriteRenderer와 BoxCollider2D가 있어야 한다.
 - 선택된 오브젝트에 `Platform2D`가 아직 없어야 한다.
 
@@ -33,18 +34,21 @@
 ## 대안 및 예외 흐름
 
 - 1a. 선택된 오브젝트가 없거나 조건을 만족하지 않으면 변환 버튼은 비활성화된다.
+- 1b. Play Mode이면 변환 버튼은 비활성화되며, 시스템은 Edit Mode에서 변환하라고 안내한다.
 
 ## 인수 조건
 
 - [ ] 기존 SpriteRenderer와 BoxCollider2D가 있는 오브젝트를 Platform으로 변환할 수 있다.
 - [ ] 변환 후 현재 외형 크기가 유지된다.
 - [ ] 변환 후 Inspector에서 Width와 Height를 편집할 수 있다.
+- [ ] Play Mode에서는 변환이 정식 씬 저장으로 오인되지 않도록 차단된다.
 
 ## 구현 메모
 
 - `MapBuilderWindow.ConvertSelectedToPlatform`이 선택 오브젝트의 bounds와 부모 scale을 기준으로 로컬 Platform 크기를 계산한다.
 - `Undo.AddComponent<Platform2D>`로 변환 작업을 Undo 가능하게 기록한다.
-- Unity 내장 Roslyn 컴파일러로 전체 런타임 및 Editor 스크립트 컴파일을 확인했다. 오류는 없고 기존 런타임 직렬화 필드 관련 경고 2건만 발생했다.
+- `MapBuilderWindow`는 Play Mode에서 변환 버튼을 비활성화하고, 직접 호출되더라도 안내 후 중단한다.
+- 2026-06-22에 Play Mode 변환으로 Unity 백업 씬에만 변경이 남는 상황을 방지하도록 구현을 보강했다.
 
 ## 미결 질문
 

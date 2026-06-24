@@ -15,8 +15,7 @@ public class JumpPowerGauge : MonoBehaviour
     [SerializeField] private float barHeight = 1.05f;
     [SerializeField] private Sprite gaugeSprite;
     [SerializeField] private Color backgroundColor = new Color(0.04f, 0.05f, 0.06f, 0.85f);
-    [SerializeField] private Color fillColor = new Color(0.1f, 0.75f, 1f, 0.95f);
-    [SerializeField] private Color lockedFillColor = new Color(1f, 0.82f, 0.15f, 1f);
+    [SerializeField] private Gradient fillColorGradient = CreateDefaultFillColorGradient();
 
     [Header("Debug")]
     [SerializeField] private float normalizedValue;
@@ -99,6 +98,8 @@ public class JumpPowerGauge : MonoBehaviour
 
     private void EnsureVisuals()
     {
+        EnsureFillColorGradient();
+
         if (gaugeSprite == null)
         {
             gaugeSprite = CreateRuntimeSquareSprite();
@@ -163,7 +164,7 @@ public class JumpPowerGauge : MonoBehaviour
         fillRenderer.transform.localPosition = new Vector3(0f, -barHeight * 0.5f + fillHeight * 0.5f, -0.01f);
         fillRenderer.transform.localRotation = Quaternion.identity;
         fillRenderer.transform.localScale = new Vector3(barWidth * 0.68f, fillHeight, 1f);
-        fillRenderer.color = locked ? lockedFillColor : fillColor;
+        fillRenderer.color = EvaluateFillColor(normalizedValue);
     }
 
     private void SetVisible(bool visible)
@@ -186,10 +187,48 @@ public class JumpPowerGauge : MonoBehaviour
         return sprite;
     }
 
+    private Color EvaluateFillColor(float gaugeValue)
+    {
+        EnsureFillColorGradient();
+        return fillColorGradient.Evaluate(Mathf.Clamp01(gaugeValue));
+    }
+
+    private void EnsureFillColorGradient()
+    {
+        if (fillColorGradient == null || fillColorGradient.colorKeys.Length == 0)
+        {
+            fillColorGradient = CreateDefaultFillColorGradient();
+        }
+    }
+
+    private static Gradient CreateDefaultFillColorGradient()
+    {
+        Gradient gradient = new Gradient();
+        gradient.SetKeys(
+            new[]
+            {
+                new GradientColorKey(new Color(0.1f, 0.55f, 1f), 0f),
+                new GradientColorKey(new Color(0.02f, 0.85f, 1f), 0.35f),
+                new GradientColorKey(new Color(1f, 0.88f, 0.16f), 0.68f),
+                new GradientColorKey(new Color(1f, 0.45f, 0.08f), 0.86f),
+                new GradientColorKey(new Color(1f, 0.08f, 0.05f), 1f)
+            },
+            new[]
+            {
+                new GradientAlphaKey(0.95f, 0f),
+                new GradientAlphaKey(0.95f, 0.7f),
+                new GradientAlphaKey(1f, 1f)
+            });
+
+        return gradient;
+    }
+
     private void OnValidate()
     {
         barWidth = Mathf.Max(0.02f, barWidth);
         barHeight = Mathf.Max(0.1f, barHeight);
+        normalizedValue = Mathf.Clamp01(normalizedValue);
+        EnsureFillColorGradient();
         currentPower = EvaluatePower(normalizedValue);
     }
 }

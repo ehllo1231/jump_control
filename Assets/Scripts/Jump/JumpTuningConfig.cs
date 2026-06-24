@@ -1,6 +1,14 @@
 using System;
 using UnityEngine;
 
+public enum WallBounceVerticalVelocityMode
+{
+    [InspectorName("Preserve Pre-Collision Y Velocity")]
+    PreservePreCollisionVelocity = 0,
+    [InspectorName("Use Current Collision Y Velocity")]
+    UseCurrentCollisionVelocity = 1
+}
+
 /// <summary>
 /// Unity Inspector에서 실시간으로 조정하는 점프 튜닝 값입니다.
 /// PlayerController가 한 인스턴스를 보관하고 방향 및 게이지 컴포넌트에 공유합니다.
@@ -17,9 +25,19 @@ public sealed class JumpTuningConfig
     private const float MinimumChargeDuration = 0.05f;
     private const float DefaultMinimumJumpPower = 7f;
     private const float DefaultMaximumJumpPower = 16f;
+    private const float DefaultWallBounceElasticity = 0.18f;
+    private const float MaximumWallBounceElasticity = 2f;
+    private const WallBounceVerticalVelocityMode DefaultWallBounceVerticalVelocityMode =
+        WallBounceVerticalVelocityMode.PreservePreCollisionVelocity;
 
     [Header("Player Body")]
     [SerializeField, Min(MinimumPlayerSquareSize)] private float playerSquareSize = DefaultPlayerSquareSize;
+
+    [Header("Collision")]
+    [Tooltip("벽 충돌 시 반대 방향으로 되돌리는 속도 비율입니다. 바닥 착지에는 적용하지 않습니다.")]
+    [SerializeField, Range(0f, MaximumWallBounceElasticity)] private float wallBounceElasticity = DefaultWallBounceElasticity;
+    [Tooltip("벽 충돌 후 세로 속도를 충돌 직전 값으로 보존할지, 기존처럼 충돌 처리 후 현재 값을 사용할지 선택합니다.")]
+    [SerializeField] private WallBounceVerticalVelocityMode wallBounceVerticalVelocityMode = DefaultWallBounceVerticalVelocityMode;
 
     [Header("Direction")]
     [SerializeField] private float minDirectionAngle = DefaultMinAngle;
@@ -45,6 +63,9 @@ public sealed class JumpTuningConfig
     public float GaugeChargeDuration => Mathf.Max(MinimumChargeDuration, gaugeChargeDuration);
     public float MinimumJumpPower => Mathf.Min(minimumJumpPower, maximumJumpPower);
     public float MaximumJumpPower => Mathf.Max(minimumJumpPower, maximumJumpPower);
+    public float WallBounceElasticity => Mathf.Clamp(wallBounceElasticity, 0f, MaximumWallBounceElasticity);
+    public WallBounceVerticalVelocityMode WallBounceVerticalVelocityMode =>
+        NormalizeWallBounceVerticalVelocityMode(wallBounceVerticalVelocityMode);
 
     public float EvaluateJumpPower(float normalizedGaugeValue)
     {
@@ -58,6 +79,8 @@ public sealed class JumpTuningConfig
     public void Validate()
     {
         playerSquareSize = Mathf.Max(MinimumPlayerSquareSize, playerSquareSize);
+        wallBounceElasticity = Mathf.Clamp(wallBounceElasticity, 0f, MaximumWallBounceElasticity);
+        wallBounceVerticalVelocityMode = NormalizeWallBounceVerticalVelocityMode(wallBounceVerticalVelocityMode);
         directionSweepSpeed = Mathf.Max(0f, directionSweepSpeed);
         directionStartNormalized = Mathf.Clamp01(directionStartNormalized);
         gaugeChargeDuration = Mathf.Max(MinimumChargeDuration, gaugeChargeDuration);
@@ -78,5 +101,18 @@ public sealed class JumpTuningConfig
     private static AnimationCurve CreateDefaultPowerResponse()
     {
         return AnimationCurve.Linear(0f, 0f, 1f, 1f);
+    }
+
+    private static WallBounceVerticalVelocityMode NormalizeWallBounceVerticalVelocityMode(
+        WallBounceVerticalVelocityMode mode)
+    {
+        switch (mode)
+        {
+            case WallBounceVerticalVelocityMode.PreservePreCollisionVelocity:
+            case WallBounceVerticalVelocityMode.UseCurrentCollisionVelocity:
+                return mode;
+            default:
+                return DefaultWallBounceVerticalVelocityMode;
+        }
     }
 }

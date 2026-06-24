@@ -1,29 +1,59 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 /// <summary>
-/// Player의 현재 위치와 점프 튜닝값으로 Scene View에 도달 후보 궤적을 표시합니다.
+/// Player의 현재 위치와 점프 튜닝값으로 Scene View에 도달 가능한 공간을 표시합니다.
 /// </summary>
 [InitializeOnLoad]
 public static class JumpReachabilityOverlay
 {
     private const string EnabledKey = "JumpTiming.JumpReachabilityOverlay.Enabled";
     private const string MenuPath = "Tools/Jump Timing/Show Jump Reachability";
-    private const int AngleSampleCount = 13;
-    private const int PowerSampleCount = 4;
-    private const int TrajectoryStepCount = 56;
+    private const int AngleSampleCount = 25;
+    private const int PowerSampleCount = 9;
+    private const int TrajectoryStepCount = 42;
     private const float MinimumPreviewSeconds = 0.75f;
     private const float MaximumPreviewSeconds = 4.5f;
     private const float CandidateTopInset = 0.02f;
+    private const float RebuildIntervalSeconds = 0.1f;
+    private const float HashPrecision = 1000f;
+    private const float CollisionSkin = 0.01f;
+    private const float InitialContactIgnoreDistance = 0.015f;
+    private const float MinimumSimulationDeltaTime = 0.001f;
+    private const float DefaultMinimumWallNormalX = 0.55f;
+    private const float DefaultMinimumWallBounceExitSpeed = 1.25f;
+    private const float DefaultWallBounceSeparationDistance = 0.015f;
+    private const int MaximumWallBouncesPerTrajectory = 4;
 
-    private static readonly Color lowPowerColor = new Color(0.2f, 0.62f, 1f, 0.18f);
-    private static readonly Color highPowerColor = new Color(1f, 0.78f, 0.18f, 0.72f);
+    private static readonly Color boundaryColor = new Color(0.2f, 0.74f, 1f, 0.72f);
     private static readonly Color candidateColor = new Color(0.2f, 1f, 0.55f, 0.95f);
     private static readonly Color startColor = new Color(1f, 1f, 1f, 0.95f);
+    private static readonly Color32 areaVertexColor = new Color32(46, 158, 255, 32);
+
+    private static readonly RaycastHit2D[] castHits = new RaycastHit2D[12];
+    private static readonly List<Vector3> meshVertices = new List<Vector3>(48000);
+    private static readonly List<int> meshTriangles = new List<int>(72000);
+    private static readonly List<Color32> meshColors = new List<Color32>(48000);
+    private static readonly Dictionary<Platform2D, ReachCandidate> cachedCandidates = new Dictionary<Platform2D, ReachCandidate>();
+    private static readonly ContactFilter2D obstacleFilter = new ContactFilter2D
+    {
+        useTriggers = false
+    };
 
     private static GUIStyle labelStyle;
     private static GUIStyle compactLabelStyle;
+    private static Mesh areaMesh;
+    private static Material areaMaterial;
+    private static int cachedHash;
+    private static bool hasCachedPreview;
+    private static double lastRebuildTime = -1000d;
+    private static Vector2 cachedStart;
+    private static float cachedMinAngle;
+    private static float cachedMaxAngle;
+    private static float cachedMinPower;
+    private static float cachedMaxPower;
 
     public static bool IsEnabled => EditorPrefs.GetBool(EnabledKey, true);
 
@@ -79,47 +109,369 @@ public static class JumpReachabilityOverlay
         Rigidbody2D body = player.GetComponent<Rigidbody2D>();
         PlayerJumpMotor jumpMotor = player.GetComponent<PlayerJumpMotor>();
         JumpTuningConfig tuning = player.JumpTuning;
-
         Vector2 start = GetStartPosition(player, body);
         Vector2 gravity = GetGravity(body);
+        float linearDamping = GetLinearDamping(body);
         Vector2 playerHalfSize = GetPlayerHalfSize(player, tuning);
-        float playerHalfWidth = playerHalfSize.x;
-        float playerHalfHeight = playerHalfSize.y;
         List<Platform2D> platforms = FindScenePlatforms();
+        List<Collider2D> obstacles = FindSceneObstacleColliders(player);
+        int previewHash = ComputePreviewHash(player, body, jumpMotor, tuning, start, gravity, playerHalfSize, platforms, obstacles);
+
+        double now = EditorApplication.timeSinceStartup;
+        if (!hasCachedPreview || (previewHash != cachedHash && now - lastRebuildTime >= RebuildIntervalSeconds))
+        {
+            RebuildPreview(player, body, jumpMotor, tuning, start, gravity, linearDamping, playerHalfSize, platforms, previewHash, now);
+        }
+
+        DrawAreaMesh();
+        DrawStartMarker(cachedStart, cachedMinAngle, cachedMaxAngle, cachedMinPower, cachedMaxPower);
+        DrawReachableCandidates(cachedCandidates, playerHalfSize.x);
+    }
+
+    private static void RebuildPreview(
+        PlayerController player,
+        Rigidbody2D body,
+        PlayerJumpMotor jumpMotor,
+        JumpTuningConfig tuning,
+        Vector2 start,
+        Vector2 gravity,
+        float linearDamping,
+        Vector2 playerHalfSize,
+        List<Platform2D> platforms,
+        int previewHash,
+        double builtAt)
+    {
+        Trajectory[,] trajectories = new Trajectory[PowerSampleCount, AngleSampleCount];
         Dictionary<Platform2D, ReachCandidate> candidates = new Dictionary<Platform2D, ReachCandidate>();
+        Vector2 playerSize = new Vector2(playerHalfSize.x * 2f, playerHalfSize.y * 2f);
+        Vector2 castSize = new Vector2(
+            Mathf.Max(0.01f, playerSize.x - CollisionSkin * 2f),
+            Mathf.Max(0.01f, playerSize.y - CollisionSkin * 2f));
+        WallBouncePreviewSettings wallBounceSettings = GetWallBouncePreviewSettings(tuning, jumpMotor);
 
-        DrawStartMarker(start, tuning);
-
-        Color previousColor = Handles.color;
         for (int powerIndex = 0; powerIndex < PowerSampleCount; powerIndex++)
         {
             float normalizedPower = PowerSampleCount == 1 ? 1f : powerIndex / (float)(PowerSampleCount - 1);
             float power = tuning.EvaluateJumpPower(normalizedPower);
-            Color trajectoryColor = Color.Lerp(lowPowerColor, highPowerColor, normalizedPower);
-            float lineWidth = Mathf.Lerp(1.2f, 2.4f, normalizedPower);
 
             for (int angleIndex = 0; angleIndex < AngleSampleCount; angleIndex++)
             {
                 float normalizedAngle = AngleSampleCount == 1 ? 0.5f : angleIndex / (float)(AngleSampleCount - 1);
                 float angle = Mathf.Lerp(tuning.MinDirectionAngle, tuning.MaxDirectionAngle, normalizedAngle);
                 Vector2 launchVelocity = CalculateLaunchVelocity(angle, power, body, jumpMotor);
-                Vector3[] points = SampleTrajectory(start, launchVelocity, gravity);
+                Trajectory trajectory = BuildTrajectory(
+                    player,
+                    start,
+                    launchVelocity,
+                    gravity,
+                    linearDamping,
+                    castSize,
+                    wallBounceSettings);
+                trajectories[powerIndex, angleIndex] = trajectory;
 
-                Handles.color = trajectoryColor;
-                Handles.DrawAAPolyLine(lineWidth, points);
                 CollectReachableCandidates(
-                    points,
+                    trajectory,
                     platforms,
-                    playerHalfWidth,
-                    playerHalfHeight,
+                    playerHalfSize.x,
+                    playerHalfSize.y,
                     normalizedPower,
                     angle,
                     candidates);
             }
         }
 
-        DrawReachableCandidates(candidates, playerHalfWidth);
-        Handles.color = previousColor;
+        RebuildAreaMesh(trajectories);
+        cachedCandidates.Clear();
+        foreach (KeyValuePair<Platform2D, ReachCandidate> pair in candidates)
+        {
+            cachedCandidates.Add(pair.Key, pair.Value);
+        }
+
+        cachedHash = previewHash;
+        cachedStart = start;
+        cachedMinAngle = tuning.MinDirectionAngle;
+        cachedMaxAngle = tuning.MaxDirectionAngle;
+        cachedMinPower = tuning.MinimumJumpPower;
+        cachedMaxPower = tuning.MaximumJumpPower;
+        lastRebuildTime = builtAt;
+        hasCachedPreview = true;
+    }
+
+    private static Trajectory BuildTrajectory(
+        PlayerController player,
+        Vector2 start,
+        Vector2 launchVelocity,
+        Vector2 gravity,
+        float linearDamping,
+        Vector2 castSize,
+        WallBouncePreviewSettings wallBounceSettings)
+    {
+        float previewSeconds = CalculatePreviewSeconds(launchVelocity, gravity);
+        float pointDeltaTime = previewSeconds / TrajectoryStepCount;
+        float simulationDeltaTime = GetSimulationDeltaTime(pointDeltaTime);
+        Vector2 position = start;
+        Vector2 velocity = launchVelocity;
+        int wallBounceCount = 0;
+        Trajectory trajectory = new Trajectory();
+        trajectory.Add(start);
+
+        for (int i = 1; i <= TrajectoryStepCount; i++)
+        {
+            float remainingTime = pointDeltaTime;
+            bool hitObstacle = false;
+
+            while (remainingTime > 0f)
+            {
+                float deltaTime = Mathf.Min(simulationDeltaTime, remainingTime);
+                Vector2 velocityBeforeStep = velocity;
+                velocity += gravity * deltaTime;
+                velocity = ApplyLinearDamping(velocity, linearDamping, deltaTime);
+
+                Vector2 nextPosition = position + velocity * deltaTime;
+                if (TryFindObstacleHit(player, start, position, nextPosition, castSize, out ObstacleHit obstacleHit))
+                {
+                    trajectory.Add(obstacleHit.Point);
+
+                    if (wallBounceCount >= MaximumWallBouncesPerTrajectory
+                        || !TryCalculateWallBounceVelocity(
+                            obstacleHit,
+                            velocityBeforeStep,
+                            velocity,
+                            wallBounceSettings,
+                            out Vector2 bouncedVelocity))
+                    {
+                        hitObstacle = true;
+                        break;
+                    }
+
+                    velocity = bouncedVelocity;
+                    position = obstacleHit.Point + obstacleHit.Normal * wallBounceSettings.SeparationDistance;
+                    wallBounceCount++;
+                    remainingTime -= Mathf.Min(remainingTime, Mathf.Max(MinimumSimulationDeltaTime, deltaTime * obstacleHit.Fraction));
+                    continue;
+                }
+
+                position = nextPosition;
+                remainingTime -= deltaTime;
+            }
+
+            if (hitObstacle)
+            {
+                break;
+            }
+
+            trajectory.Add(position);
+        }
+
+        return trajectory;
+    }
+
+    private static bool TryFindObstacleHit(
+        PlayerController player,
+        Vector2 start,
+        Vector2 from,
+        Vector2 to,
+        Vector2 castSize,
+        out ObstacleHit obstacleHit)
+    {
+        obstacleHit = default;
+        Vector2 delta = to - from;
+        float distance = delta.magnitude;
+        if (distance <= 0.0001f)
+        {
+            return false;
+        }
+
+        Vector2 direction = delta / distance;
+        int hitCount = Physics2D.BoxCast(from, castSize, 0f, direction, obstacleFilter, castHits, distance);
+        float nearestDistance = float.PositiveInfinity;
+        Vector2 nearestNormal = Vector2.zero;
+        bool foundHit = false;
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            RaycastHit2D hit = castHits[i];
+            Collider2D collider = hit.collider;
+            if (collider == null || collider.transform.IsChildOf(player.transform))
+            {
+                continue;
+            }
+
+            bool nearStart = (from - start).sqrMagnitude <= 0.04f;
+            if (nearStart && hit.distance <= InitialContactIgnoreDistance)
+            {
+                continue;
+            }
+
+            if (hit.distance < nearestDistance)
+            {
+                nearestDistance = hit.distance;
+                nearestNormal = hit.normal;
+                foundHit = true;
+            }
+        }
+
+        if (!foundHit)
+        {
+            return false;
+        }
+
+        float fraction = distance > 0.0001f ? Mathf.Clamp01(nearestDistance / distance) : 1f;
+        obstacleHit = new ObstacleHit(from + direction * nearestDistance, nearestNormal, fraction);
+        return true;
+    }
+
+    private static bool TryCalculateWallBounceVelocity(
+        ObstacleHit obstacleHit,
+        Vector2 velocityBeforeStep,
+        Vector2 currentVelocity,
+        WallBouncePreviewSettings settings,
+        out Vector2 bouncedVelocity)
+    {
+        bouncedVelocity = currentVelocity;
+        if (!settings.Enabled || Mathf.Abs(obstacleHit.Normal.x) < settings.MinimumWallNormalX)
+        {
+            return false;
+        }
+
+        float wallDirection = Mathf.Sign(obstacleHit.Normal.x);
+        float impactSpeed = Mathf.Abs(currentVelocity.x);
+        float exitSpeedFloor = settings.MinimumExitSpeed * Mathf.Clamp01(settings.Elasticity);
+        float bounceSpeed = Mathf.Max(impactSpeed * settings.Elasticity, exitSpeedFloor);
+        float currentOutwardSpeed = currentVelocity.x * wallDirection;
+        if (currentOutwardSpeed >= bounceSpeed)
+        {
+            return false;
+        }
+
+        float bounceX = wallDirection * bounceSpeed;
+        float bounceY = settings.VerticalMode == WallBounceVerticalVelocityMode.PreservePreCollisionVelocity
+            ? velocityBeforeStep.y
+            : currentVelocity.y;
+        bouncedVelocity = new Vector2(bounceX, bounceY);
+        return true;
+    }
+
+    private static void RebuildAreaMesh(Trajectory[,] trajectories)
+    {
+        Mesh mesh = GetAreaMesh();
+        mesh.Clear();
+        meshVertices.Clear();
+        meshTriangles.Clear();
+        meshColors.Clear();
+
+        for (int powerIndex = 0; powerIndex < PowerSampleCount; powerIndex++)
+        {
+            for (int angleIndex = 0; angleIndex < AngleSampleCount - 1; angleIndex++)
+            {
+                AddTrajectoryStrip(trajectories[powerIndex, angleIndex], trajectories[powerIndex, angleIndex + 1]);
+            }
+        }
+
+        mesh.indexFormat = meshVertices.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16;
+        mesh.SetVertices(meshVertices);
+        mesh.SetColors(meshColors);
+        mesh.SetTriangles(meshTriangles, 0);
+        mesh.RecalculateBounds();
+    }
+
+    private static void AddTrajectoryStrip(Trajectory a, Trajectory b)
+    {
+        int count = Mathf.Min(a.Count, b.Count);
+        for (int i = 1; i < count; i++)
+        {
+            AddQuad(a.Points[i - 1], a.Points[i], b.Points[i], b.Points[i - 1]);
+        }
+    }
+
+    private static void AddQuad(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+    {
+        if (IsDegenerate(a, b, c, d))
+        {
+            return;
+        }
+
+        int startIndex = meshVertices.Count;
+        meshVertices.Add(a);
+        meshVertices.Add(b);
+        meshVertices.Add(c);
+        meshVertices.Add(d);
+
+        meshColors.Add(areaVertexColor);
+        meshColors.Add(areaVertexColor);
+        meshColors.Add(areaVertexColor);
+        meshColors.Add(areaVertexColor);
+
+        meshTriangles.Add(startIndex);
+        meshTriangles.Add(startIndex + 1);
+        meshTriangles.Add(startIndex + 2);
+        meshTriangles.Add(startIndex);
+        meshTriangles.Add(startIndex + 2);
+        meshTriangles.Add(startIndex + 3);
+    }
+
+    private static bool IsDegenerate(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+    {
+        float areaA = Mathf.Abs(Vector3.Cross(b - a, c - a).z);
+        float areaB = Mathf.Abs(Vector3.Cross(c - a, d - a).z);
+        return areaA + areaB <= 0.00001f;
+    }
+
+    private static void DrawAreaMesh()
+    {
+        Mesh mesh = GetAreaMesh();
+        if (mesh.vertexCount == 0 || Event.current.type != EventType.Repaint)
+        {
+            return;
+        }
+
+        Material material = GetAreaMaterial();
+        if (material == null)
+        {
+            return;
+        }
+
+        material.SetPass(0);
+        Graphics.DrawMeshNow(mesh, Matrix4x4.identity);
+    }
+
+    private static Mesh GetAreaMesh()
+    {
+        if (areaMesh == null)
+        {
+            areaMesh = new Mesh
+            {
+                name = "Jump Reachability Area",
+                hideFlags = HideFlags.HideAndDontSave
+            };
+        }
+
+        return areaMesh;
+    }
+
+    private static Material GetAreaMaterial()
+    {
+        if (areaMaterial != null)
+        {
+            return areaMaterial;
+        }
+
+        Shader shader = Shader.Find("Hidden/Internal-Colored");
+        if (shader == null)
+        {
+            return null;
+        }
+
+        areaMaterial = new Material(shader)
+        {
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        areaMaterial.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+        areaMaterial.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+        areaMaterial.SetInt("_Cull", (int)CullMode.Off);
+        areaMaterial.SetInt("_ZWrite", 0);
+        areaMaterial.SetInt("_ZTest", (int)CompareFunction.Always);
+        return areaMaterial;
     }
 
     private static PlayerController FindPlayerController()
@@ -160,7 +512,33 @@ public static class JumpReachabilityOverlay
             scenePlatforms.Add(platform);
         }
 
+        scenePlatforms.Sort((a, b) => a.GetInstanceID().CompareTo(b.GetInstanceID()));
         return scenePlatforms;
+    }
+
+    private static List<Collider2D> FindSceneObstacleColliders(PlayerController player)
+    {
+        Collider2D[] allColliders = Resources.FindObjectsOfTypeAll<Collider2D>();
+        List<Collider2D> sceneColliders = new List<Collider2D>(allColliders.Length);
+
+        foreach (Collider2D collider in allColliders)
+        {
+            if (collider == null
+                || !collider.enabled
+                || collider.isTrigger
+                || EditorUtility.IsPersistent(collider)
+                || !collider.gameObject.scene.IsValid()
+                || !collider.gameObject.activeInHierarchy
+                || collider.transform.IsChildOf(player.transform))
+            {
+                continue;
+            }
+
+            sceneColliders.Add(collider);
+        }
+
+        sceneColliders.Sort((a, b) => a.GetInstanceID().CompareTo(b.GetInstanceID()));
+        return sceneColliders;
     }
 
     private static Vector2 GetStartPosition(PlayerController player, Rigidbody2D body)
@@ -178,6 +556,32 @@ public static class JumpReachabilityOverlay
         float gravityScale = body != null ? body.gravityScale : 1f;
         Vector2 gravity = Physics2D.gravity * gravityScale;
         return gravity.sqrMagnitude > 0.0001f ? gravity : new Vector2(0f, -9.81f);
+    }
+
+    private static float GetLinearDamping(Rigidbody2D body)
+    {
+        return body != null ? Mathf.Max(0f, body.linearDamping) : 0f;
+    }
+
+    private static WallBouncePreviewSettings GetWallBouncePreviewSettings(
+        JumpTuningConfig tuning,
+        PlayerJumpMotor jumpMotor)
+    {
+        float elasticity = tuning != null ? tuning.WallBounceElasticity : 0f;
+        WallBounceVerticalVelocityMode verticalMode = tuning != null
+            ? tuning.WallBounceVerticalVelocityMode
+            : WallBounceVerticalVelocityMode.PreservePreCollisionVelocity;
+        float minimumWallNormalX = jumpMotor != null
+            ? jumpMotor.MinimumWallNormalX
+            : DefaultMinimumWallNormalX;
+        float minimumExitSpeed = jumpMotor != null
+            ? jumpMotor.MinimumWallBounceExitSpeed
+            : DefaultMinimumWallBounceExitSpeed;
+        float separationDistance = jumpMotor != null
+            ? jumpMotor.WallBounceSeparationDistance
+            : DefaultWallBounceSeparationDistance;
+
+        return new WallBouncePreviewSettings(elasticity, verticalMode, minimumWallNormalX, minimumExitSpeed, separationDistance);
     }
 
     private static Vector2 GetPlayerHalfSize(PlayerController player, JumpTuningConfig tuning)
@@ -217,21 +621,6 @@ public static class JumpReachabilityOverlay
         return baseVelocity + direction * power * impulseMultiplier / mass;
     }
 
-    private static Vector3[] SampleTrajectory(Vector2 start, Vector2 launchVelocity, Vector2 gravity)
-    {
-        float previewSeconds = CalculatePreviewSeconds(launchVelocity, gravity);
-        Vector3[] points = new Vector3[TrajectoryStepCount + 1];
-
-        for (int i = 0; i < points.Length; i++)
-        {
-            float t = previewSeconds * i / TrajectoryStepCount;
-            Vector2 position = start + launchVelocity * t + 0.5f * gravity * t * t;
-            points[i] = new Vector3(position.x, position.y, 0f);
-        }
-
-        return points;
-    }
-
     private static float CalculatePreviewSeconds(Vector2 launchVelocity, Vector2 gravity)
     {
         float verticalGravity = Mathf.Abs(gravity.y);
@@ -244,8 +633,24 @@ public static class JumpReachabilityOverlay
         return Mathf.Clamp(airborneSeconds + 0.6f, MinimumPreviewSeconds, MaximumPreviewSeconds);
     }
 
+    private static float GetSimulationDeltaTime(float pointDeltaTime)
+    {
+        float fixedDeltaTime = Mathf.Max(MinimumSimulationDeltaTime, Time.fixedDeltaTime);
+        return Mathf.Clamp(fixedDeltaTime, MinimumSimulationDeltaTime, Mathf.Max(MinimumSimulationDeltaTime, pointDeltaTime));
+    }
+
+    private static Vector2 ApplyLinearDamping(Vector2 velocity, float linearDamping, float deltaTime)
+    {
+        if (linearDamping <= 0f)
+        {
+            return velocity;
+        }
+
+        return velocity / (1f + linearDamping * deltaTime);
+    }
+
     private static void CollectReachableCandidates(
-        Vector3[] points,
+        Trajectory trajectory,
         List<Platform2D> platforms,
         float playerHalfWidth,
         float playerHalfHeight,
@@ -253,10 +658,10 @@ public static class JumpReachabilityOverlay
         float angle,
         Dictionary<Platform2D, ReachCandidate> candidates)
     {
-        for (int i = 1; i < points.Length; i++)
+        for (int i = 1; i < trajectory.Count; i++)
         {
-            Vector2 previous = points[i - 1];
-            Vector2 current = points[i];
+            Vector2 previous = trajectory.Points[i - 1];
+            Vector2 current = trajectory.Points[i];
             if (current.y > previous.y)
             {
                 continue;
@@ -285,10 +690,17 @@ public static class JumpReachabilityOverlay
         float playerHalfHeight,
         out Vector2 landingPoint)
     {
-        Bounds bounds = platform.WorldBounds;
-        float centerLandingY = bounds.max.y + playerHalfHeight;
-
         landingPoint = default;
+        if (!platform.TryGetTopLandingSegment(
+            playerHalfWidth,
+            out float minStandX,
+            out float maxStandX,
+            out float platformTopY))
+        {
+            return false;
+        }
+
+        float centerLandingY = platformTopY + playerHalfHeight;
         if (previous.y < centerLandingY || current.y > centerLandingY)
         {
             return false;
@@ -307,8 +719,6 @@ public static class JumpReachabilityOverlay
         }
 
         float x = Mathf.Lerp(previous.x, current.x, ratio);
-        float minStandX = bounds.min.x + playerHalfWidth;
-        float maxStandX = bounds.max.x - playerHalfWidth;
         if (minStandX > maxStandX || x < minStandX || x > maxStandX)
         {
             return false;
@@ -318,19 +728,27 @@ public static class JumpReachabilityOverlay
         return true;
     }
 
-    private static void DrawStartMarker(Vector2 start, JumpTuningConfig tuning)
+    private static void DrawStartMarker(
+        Vector2 start,
+        float minAngle,
+        float maxAngle,
+        float minPower,
+        float maxPower)
     {
         float handleSize = HandleUtility.GetHandleSize(start) * 0.08f;
+        Color previousColor = Handles.color;
         Handles.color = startColor;
         Handles.DrawWireDisc(start, Vector3.forward, handleSize);
 
         string label =
-            $"Jump Reach\nAngle {tuning.MinDirectionAngle:0.#}°~{tuning.MaxDirectionAngle:0.#}°\nPower {tuning.MinimumJumpPower:0.#}~{tuning.MaximumJumpPower:0.#}";
+            $"Reach Area\nAngle {minAngle:0.#}°~{maxAngle:0.#}°\nPower {minPower:0.#}~{maxPower:0.#}";
         Handles.Label(start + Vector2.up * handleSize * 2.4f, label, GetLabelStyle());
+        Handles.color = previousColor;
     }
 
     private static void DrawReachableCandidates(Dictionary<Platform2D, ReachCandidate> candidates, float playerHalfWidth)
     {
+        Color previousColor = Handles.color;
         foreach (KeyValuePair<Platform2D, ReachCandidate> pair in candidates)
         {
             Platform2D platform = pair.Key;
@@ -351,10 +769,105 @@ public static class JumpReachabilityOverlay
             Handles.color = candidateColor;
             Handles.DrawAAPolyLine(5f, topLeft, topRight);
             Handles.DrawSolidDisc(candidate.Point, Vector3.forward, handleSize);
+            Handles.color = boundaryColor;
+            Handles.DrawWireDisc(candidate.Point, Vector3.forward, handleSize * 1.25f);
 
             string label = $"Reachable\n{candidate.Angle:0.#}° / {candidate.NormalizedPower:P0}";
             Handles.Label(candidate.Point + Vector2.up * handleSize * 2.2f, label, GetCompactLabelStyle());
         }
+
+        Handles.color = previousColor;
+    }
+
+    private static int ComputePreviewHash(
+        PlayerController player,
+        Rigidbody2D body,
+        PlayerJumpMotor jumpMotor,
+        JumpTuningConfig tuning,
+        Vector2 start,
+        Vector2 gravity,
+        Vector2 playerHalfSize,
+        List<Platform2D> platforms,
+        List<Collider2D> obstacles)
+    {
+        unchecked
+        {
+            int hash = 17;
+            AddHash(ref hash, player.GetInstanceID());
+            AddHash(ref hash, start);
+            AddHash(ref hash, gravity);
+            AddHash(ref hash, playerHalfSize);
+            AddHash(ref hash, tuning.MinDirectionAngle);
+            AddHash(ref hash, tuning.MaxDirectionAngle);
+            AddHash(ref hash, tuning.MinimumJumpPower);
+            AddHash(ref hash, tuning.MaximumJumpPower);
+            AddHash(ref hash, tuning.WallBounceElasticity);
+            AddHash(ref hash, (int)tuning.WallBounceVerticalVelocityMode);
+
+            for (int i = 0; i < PowerSampleCount; i++)
+            {
+                float normalizedPower = PowerSampleCount == 1 ? 1f : i / (float)(PowerSampleCount - 1);
+                AddHash(ref hash, tuning.EvaluateJumpPower(normalizedPower));
+            }
+
+            if (jumpMotor != null)
+            {
+                AddHash(ref hash, jumpMotor.ImpulseMultiplier);
+                AddHash(ref hash, jumpMotor.ClearVelocityBeforeJump ? 1 : 0);
+                AddHash(ref hash, jumpMotor.KeepHorizontalVelocityOnJump ? 1 : 0);
+                AddHash(ref hash, jumpMotor.MinimumWallNormalX);
+                AddHash(ref hash, jumpMotor.MinimumWallBounceExitSpeed);
+                AddHash(ref hash, jumpMotor.WallBounceSeparationDistance);
+            }
+
+            if (body != null)
+            {
+                AddHash(ref hash, body.mass);
+                AddHash(ref hash, body.gravityScale);
+                AddHash(ref hash, body.linearDamping);
+                if (Application.isPlaying)
+                {
+                    AddHash(ref hash, body.linearVelocity);
+                }
+            }
+
+            foreach (Platform2D platform in platforms)
+            {
+                AddHash(ref hash, platform.GetInstanceID());
+                AddHash(ref hash, (int)platform.Shape);
+                AddHash(ref hash, platform.WorldBounds);
+            }
+
+            foreach (Collider2D collider in obstacles)
+            {
+                AddHash(ref hash, collider.GetInstanceID());
+                AddHash(ref hash, collider.bounds);
+            }
+
+            return hash;
+        }
+    }
+
+    private static void AddHash(ref int hash, int value)
+    {
+        hash = hash * 31 + value;
+    }
+
+    private static void AddHash(ref int hash, float value)
+    {
+        hash = hash * 31 + Mathf.RoundToInt(value * HashPrecision);
+    }
+
+    private static void AddHash(ref int hash, Vector2 value)
+    {
+        AddHash(ref hash, value.x);
+        AddHash(ref hash, value.y);
+    }
+
+    private static void AddHash(ref int hash, Bounds bounds)
+    {
+        AddHash(ref hash, bounds.center);
+        AddHash(ref hash, bounds.size);
     }
 
     private static GUIStyle GetLabelStyle()
@@ -384,6 +897,62 @@ public static class JumpReachabilityOverlay
         }
 
         return compactLabelStyle;
+    }
+
+    private sealed class Trajectory
+    {
+        public readonly Vector3[] Points = new Vector3[TrajectoryStepCount + MaximumWallBouncesPerTrajectory + 1];
+        public int Count { get; private set; }
+        public Vector2 LastPoint => Points[Mathf.Max(0, Count - 1)];
+
+        public void Add(Vector2 point)
+        {
+            if (Count >= Points.Length)
+            {
+                return;
+            }
+
+            Points[Count] = new Vector3(point.x, point.y, 0f);
+            Count++;
+        }
+    }
+
+    private readonly struct ObstacleHit
+    {
+        public ObstacleHit(Vector2 point, Vector2 normal, float fraction)
+        {
+            Point = point;
+            Normal = normal.sqrMagnitude > 0.0001f ? normal.normalized : Vector2.zero;
+            Fraction = Mathf.Clamp01(fraction);
+        }
+
+        public Vector2 Point { get; }
+        public Vector2 Normal { get; }
+        public float Fraction { get; }
+    }
+
+    private readonly struct WallBouncePreviewSettings
+    {
+        public WallBouncePreviewSettings(
+            float elasticity,
+            WallBounceVerticalVelocityMode verticalMode,
+            float minimumWallNormalX,
+            float minimumExitSpeed,
+            float separationDistance)
+        {
+            Elasticity = Mathf.Max(0f, elasticity);
+            VerticalMode = verticalMode;
+            MinimumWallNormalX = Mathf.Clamp01(minimumWallNormalX);
+            MinimumExitSpeed = Mathf.Max(0f, minimumExitSpeed);
+            SeparationDistance = Mathf.Max(0f, separationDistance);
+        }
+
+        public float Elasticity { get; }
+        public WallBounceVerticalVelocityMode VerticalMode { get; }
+        public float MinimumWallNormalX { get; }
+        public float MinimumExitSpeed { get; }
+        public float SeparationDistance { get; }
+        public bool Enabled => Elasticity > 0f;
     }
 
     private readonly struct ReachCandidate

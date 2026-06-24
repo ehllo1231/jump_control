@@ -310,6 +310,12 @@ public class PlayerController : MonoBehaviour
             bodyCollider.size = Vector2.one * playerSize;
         }
 
+        if (jumpMotor != null)
+        {
+            jumpMotor.SetWallBounceElasticity(jumpTuning.WallBounceElasticity);
+            jumpMotor.SetWallBounceVerticalVelocityMode(jumpTuning.WallBounceVerticalVelocityMode);
+        }
+
         if (playerVisual != null)
         {
             playerVisual.SetBodySize(playerSize);

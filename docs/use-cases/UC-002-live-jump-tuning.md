@@ -40,6 +40,8 @@
 - 대체 문서: [UC-002-04 점프 파워 튜닝](./UC-002-04-tune-jump-power.md)
 - 대체 문서: [UC-002-05 Play Mode 튜닝 값 유지](./UC-002-05-persist-play-mode-tuning.md)
 - 대체 문서: [UC-002-06 코드 수정 중 튜닝 값 보존](./UC-002-06-preserve-manual-tuning-values.md)
+- 대체 문서: [UC-002-07 플레이어 시각 요소와 충돌체 정렬 유지](./UC-002-07-keep-player-visual-and-collider-aligned.md)
+- 대체 문서: [UC-002-08 벽 충돌 탄성 튜닝](./UC-002-08-tune-wall-bounce-elasticity.md)
 
 ## 미결 질문
 

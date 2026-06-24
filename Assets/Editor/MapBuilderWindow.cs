@@ -11,10 +11,13 @@ using UnityEngine.SceneManagement;
 public sealed class MapBuilderWindow : EditorWindow
 {
     private const string DefaultPlatformPrefabPath = "Assets/Prefabs/Platform.prefab";
+    private const float QuickRotationStep = 15f;
 
     [SerializeField] private GameObject platformPrefab;
+    [SerializeField] private PlatformShape2D defaultShape = PlatformShape2D.Rectangle;
     [SerializeField] private float defaultWidth = 2.5f;
     [SerializeField] private float defaultHeight = 0.3f;
+    [SerializeField] private float defaultRotationDegrees;
 
     [MenuItem("Tools/Jump Timing/Map Builder")]
     public static void OpenWindow()
@@ -37,9 +40,10 @@ public sealed class MapBuilderWindow : EditorWindow
         EditorGUILayout.Space(6f);
         EditorGUILayout.LabelField("2D Jump Map Builder", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
-            "1) Platform 생성  2) Scene View에서 이동  3) Inspector에서 Width/Height 조절  4) 도달 후보 확인  5) 선택한 발판에서 테스트",
+            "1) Platform 생성  2) Scene View에서 이동/회전  3) Inspector에서 크기 조절  4) 도달 후보 확인  5) 선택한 발판에서 테스트",
             MessageType.Info);
-        if (Application.isPlaying)
+        bool isPlaying = Application.isPlaying;
+        if (isPlaying)
         {
             EditorGUILayout.HelpBox(
                 "Play Mode에서 생성한 Platform은 게임을 정지하면 Edit Mode 씬에 다시 적용됩니다.",
@@ -53,11 +57,13 @@ public sealed class MapBuilderWindow : EditorWindow
             typeof(GameObject),
             false) as GameObject;
 
+        defaultShape = (PlatformShape2D)EditorGUILayout.EnumPopup("New Platform Shape", defaultShape);
         defaultWidth = Mathf.Max(0.1f, EditorGUILayout.FloatField("New Platform Width", defaultWidth));
         defaultHeight = Mathf.Max(0.1f, EditorGUILayout.FloatField("New Platform Height", defaultHeight));
+        defaultRotationDegrees = EditorGUILayout.FloatField("New Platform Rotation", defaultRotationDegrees);
 
         EditorGUILayout.Space(8f);
-        if (GUILayout.Button("Create Platform", GUILayout.Height(34f)))
+        if (GUILayout.Button(GetCreateButtonLabel(), GUILayout.Height(34f)))
         {
             CreatePlatform();
         }
@@ -73,22 +79,32 @@ public sealed class MapBuilderWindow : EditorWindow
             EditorGUILayout.ObjectField("Platform", selectedPlatform, typeof(Platform2D), true);
             using (new EditorGUI.DisabledScope(true))
             {
+                EditorGUILayout.EnumPopup("Shape", selectedPlatform.Shape);
                 EditorGUILayout.Vector2Field("Size", selectedPlatform.Size);
                 EditorGUILayout.Vector2Field("Top Center", selectedPlatform.TopCenter);
             }
+
+            DrawSelectedRotationControls(selectedPlatform);
         }
         else
         {
             EditorGUILayout.HelpBox("Platform을 선택하면 크기 정보와 테스트 버튼을 사용할 수 있습니다.", MessageType.None);
         }
 
-        bool canConvert = selectedPlatform == null && CanConvertToPlatform(selectedObject);
+        bool canConvert = !isPlaying && selectedPlatform == null && CanConvertToPlatform(selectedObject);
         using (new EditorGUI.DisabledScope(!canConvert))
         {
             if (GUILayout.Button("Convert Selected To Editable Platform"))
             {
                 ConvertSelectedToPlatform();
             }
+        }
+
+        if (isPlaying && selectedPlatform == null && CanConvertToPlatform(selectedObject))
+        {
+            EditorGUILayout.HelpBox(
+                "Play Mode에서는 변환 대신 Edit Mode에서 Convert를 실행하세요. Play Mode 변환은 Unity가 정식 씬에 저장하지 않습니다.",
+                MessageType.Warning);
         }
 
         using (new EditorGUI.DisabledScope(selectedPlatform == null))
@@ -154,11 +170,13 @@ public sealed class MapBuilderWindow : EditorWindow
             platform = Undo.AddComponent<Platform2D>(instance);
         }
 
+        platform.SetShape(defaultShape);
         platform.SetSize(defaultWidth, defaultHeight);
+        platform.SetRotationDegrees(defaultRotationDegrees);
         EditorUtility.SetDirty(platform);
-        EditorSceneManager.MarkSceneDirty(scene);
 
         MapBuilderPlayModePersistence.TrackCreatedPlatform(platform);
+        MarkSceneDirtyIfEditable(scene);
 
         Selection.activeGameObject = instance;
         SceneView.lastActiveSceneView?.FrameSelected();
@@ -183,8 +201,73 @@ public sealed class MapBuilderWindow : EditorWindow
         return Vector3.zero;
     }
 
+    private string GetCreateButtonLabel()
+    {
+        return defaultShape == PlatformShape2D.Rectangle
+            ? "Create Platform"
+            : "Create Triangle Brick";
+    }
+
+    private void DrawSelectedRotationControls(Platform2D selectedPlatform)
+    {
+        EditorGUI.BeginChangeCheck();
+        float nextRotation = EditorGUILayout.FloatField("Rotation Z", selectedPlatform.RotationDegrees);
+        if (EditorGUI.EndChangeCheck())
+        {
+            ApplyRotation(selectedPlatform, nextRotation, "Rotate Platform");
+        }
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("-15"))
+            {
+                ApplyRotation(
+                    selectedPlatform,
+                    selectedPlatform.RotationDegrees - QuickRotationStep,
+                    "Rotate Platform");
+            }
+
+            if (GUILayout.Button("Reset Rotation"))
+            {
+                ApplyRotation(selectedPlatform, 0f, "Reset Platform Rotation");
+            }
+
+            if (GUILayout.Button("+15"))
+            {
+                ApplyRotation(
+                    selectedPlatform,
+                    selectedPlatform.RotationDegrees + QuickRotationStep,
+                    "Rotate Platform");
+            }
+        }
+    }
+
+    private static void ApplyRotation(Platform2D platform, float rotationDegrees, string undoName)
+    {
+        if (platform == null)
+        {
+            return;
+        }
+
+        Undo.RecordObject(platform.transform, undoName);
+        platform.SetRotationDegrees(rotationDegrees);
+        EditorUtility.SetDirty(platform.transform);
+        EditorUtility.SetDirty(platform);
+        MarkSceneDirtyIfEditable(platform.gameObject.scene);
+        SceneView.RepaintAll();
+    }
+
     private void ConvertSelectedToPlatform()
     {
+        if (Application.isPlaying)
+        {
+            EditorUtility.DisplayDialog(
+                "Convert Disabled In Play Mode",
+                "Play Mode에서 변환한 오브젝트는 게임을 정지하면 사라질 수 있습니다. Edit Mode로 돌아간 뒤 Convert를 실행하세요.",
+                "OK");
+            return;
+        }
+
         GameObject selectedObject = Selection.activeGameObject;
         if (!CanConvertToPlatform(selectedObject))
         {
@@ -204,8 +287,18 @@ public sealed class MapBuilderWindow : EditorWindow
         Platform2D platform = Undo.AddComponent<Platform2D>(selectedObject);
         platform.SetSize(localSize.x, localSize.y);
         EditorUtility.SetDirty(platform);
-        EditorSceneManager.MarkSceneDirty(selectedObject.scene);
+        MarkSceneDirtyIfEditable(selectedObject.scene);
         Selection.activeGameObject = selectedObject;
+    }
+
+    private static void MarkSceneDirtyIfEditable(Scene scene)
+    {
+        if (Application.isPlaying || !scene.IsValid())
+        {
+            return;
+        }
+
+        EditorSceneManager.MarkSceneDirty(scene);
     }
 
     private static bool CanConvertToPlatform(GameObject candidate)
@@ -364,7 +457,15 @@ internal static class MapBuilderPlayModePersistence
             platform = Undo.AddComponent<Platform2D>(instance);
         }
 
+        platform.SetShape(snapshot.shape);
         platform.SetSize(snapshot.size.x, snapshot.size.y);
+        if (platform.UsesTriangleShape)
+        {
+            platform.SetTriangleVertices(
+                snapshot.triangleVertexA,
+                snapshot.triangleVertexB,
+                snapshot.triangleVertexC);
+        }
         EditorUtility.SetDirty(platform);
 
         SpriteRenderer spriteRenderer = instance.GetComponent<SpriteRenderer>();
@@ -374,8 +475,19 @@ internal static class MapBuilderPlayModePersistence
             EditorUtility.SetDirty(spriteRenderer);
         }
 
-        EditorSceneManager.MarkSceneDirty(scene);
+        platform.ApplySize();
+        MarkSceneDirtyIfEditable(scene);
         return instance;
+    }
+
+    private static void MarkSceneDirtyIfEditable(Scene scene)
+    {
+        if (Application.isPlaying || !scene.IsValid())
+        {
+            return;
+        }
+
+        EditorSceneManager.MarkSceneDirty(scene);
     }
 
     private static Scene FindScene(string scenePath)
@@ -411,12 +523,17 @@ internal static class MapBuilderPlayModePersistence
         public Vector3 position;
         public Quaternion rotation;
         public Vector3 localScale;
+        public PlatformShape2D shape;
         public Vector2 size;
+        public Vector2 triangleVertexA;
+        public Vector2 triangleVertexB;
+        public Vector2 triangleVertexC;
         public Color color;
 
         public static PlatformSnapshot FromPlatform(Platform2D platform)
         {
             SpriteRenderer spriteRenderer = platform.GetComponent<SpriteRenderer>();
+            Vector2[] triangleVertices = platform.GetTriangleVertices();
             return new PlatformSnapshot
             {
                 name = platform.gameObject.name,
@@ -424,7 +541,11 @@ internal static class MapBuilderPlayModePersistence
                 position = platform.transform.position,
                 rotation = platform.transform.rotation,
                 localScale = platform.transform.localScale,
+                shape = platform.Shape,
                 size = platform.Size,
+                triangleVertexA = triangleVertices[0],
+                triangleVertexB = triangleVertices[1],
+                triangleVertexC = triangleVertices[2],
                 color = spriteRenderer != null ? spriteRenderer.color : Color.white
             };
         }
