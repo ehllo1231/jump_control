@@ -79,6 +79,17 @@ public class JumpPowerGauge : MonoBehaviour
         return currentPower;
     }
 
+    public float ShowLockedValue(float gaugeValue)
+    {
+        EnsureVisuals();
+        locked = true;
+        normalizedValue = Mathf.Clamp01(gaugeValue);
+        currentPower = EvaluatePower(normalizedValue);
+        SetVisible(true);
+        UpdateVisuals();
+        return currentPower;
+    }
+
     public void Hide()
     {
         SetVisible(false);

@@ -55,6 +55,9 @@ public sealed class JumpTuningConfig
     [Tooltip("X: 정규화 게이지 값(0~1), Y: 최소·최대 점프 세기 사이의 보간 비율(0~1)")]
     [SerializeField] private AnimationCurve gaugePowerResponse = CreateDefaultPowerResponse();
 
+    [Header("Debug Mode")]
+    [SerializeField] private bool debugModeEnabled;
+
     public float PlayerSquareSize => Mathf.Max(MinimumPlayerSquareSize, playerSquareSize);
     public float MinDirectionAngle => Mathf.Min(minDirectionAngle, maxDirectionAngle);
     public float MaxDirectionAngle => Mathf.Max(minDirectionAngle, maxDirectionAngle);
@@ -66,6 +69,7 @@ public sealed class JumpTuningConfig
     public float WallBounceElasticity => Mathf.Clamp(wallBounceElasticity, 0f, MaximumWallBounceElasticity);
     public WallBounceVerticalVelocityMode WallBounceVerticalVelocityMode =>
         NormalizeWallBounceVerticalVelocityMode(wallBounceVerticalVelocityMode);
+    public bool DebugModeEnabled => debugModeEnabled;
 
     public float EvaluateJumpPower(float normalizedGaugeValue)
     {

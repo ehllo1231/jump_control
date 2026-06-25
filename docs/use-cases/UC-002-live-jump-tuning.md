@@ -1,7 +1,7 @@
 # UC-002: 실시간 점프 튜닝 기능군
 
 - 상태: Superseded
-- 마지막 갱신일: 2026-06-21
+- 마지막 갱신일: 2026-06-24
 
 ## 목적
 
@@ -42,6 +42,7 @@
 - 대체 문서: [UC-002-06 코드 수정 중 튜닝 값 보존](./UC-002-06-preserve-manual-tuning-values.md)
 - 대체 문서: [UC-002-07 플레이어 시각 요소와 충돌체 정렬 유지](./UC-002-07-keep-player-visual-and-collider-aligned.md)
 - 대체 문서: [UC-002-08 벽 충돌 탄성 튜닝](./UC-002-08-tune-wall-bounce-elasticity.md)
+- 대체 문서: [UC-002-09 디버그 커스텀 점프 실행](./UC-002-09-run-custom-debug-jump.md)
 
 ## 미결 질문
 

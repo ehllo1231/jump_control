@@ -1,0 +1,1147 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stage 1 Phase 6 Map Preview</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fa;
+      --panel: #ffffff;
+      --panel-border: #d8dee8;
+      --ink: #1c2430;
+      --muted: #697385;
+      --grid: #e2e7ef;
+      --grid-strong: #c5cedb;
+      --current: #2b3544;
+      --current-soft: rgba(43, 53, 68, 0.18);
+      --p4: #e05f43;
+      --p5: #118878;
+      --p6: #c28a0b;
+      --route: #1b74d0;
+      --focus: #1b74d0;
+      --danger: #9a3a3a;
+      --shadow: 0 18px 42px rgba(28, 36, 48, 0.11);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, "Noto Sans CJK KR", "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      overflow: hidden;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      height: 100vh;
+      min-height: 100vh;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: end;
+      padding: 18px 24px 14px;
+      border-bottom: 1px solid var(--panel-border);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(8px);
+    }
+
+    h1 {
+      margin: 0 0 5px;
+      font-size: 22px;
+      line-height: 1.2;
+      font-weight: 760;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    button,
+    .toggle {
+      min-height: 34px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      color: var(--ink);
+      border-radius: 7px;
+      padding: 7px 10px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    button:hover,
+    .toggle:hover {
+      border-color: #9dacbd;
+    }
+
+    button.active {
+      border-color: var(--focus);
+      color: #0f4f91;
+      background: #e9f3ff;
+    }
+
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      user-select: none;
+    }
+
+    .toggle input {
+      margin: 0;
+      accent-color: var(--focus);
+    }
+
+    main {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(520px, 1fr) 390px;
+      gap: 16px;
+      padding: 16px;
+    }
+
+    .map-shell,
+    aside {
+      min-height: 0;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .map-shell {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .map-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--panel-border);
+      background: #fbfcfe;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .swatch {
+      width: 14px;
+      height: 10px;
+      border-radius: 3px;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+    }
+
+    .swatch.current { background: var(--current); }
+    .swatch.p4 { background: var(--p4); }
+    .swatch.p5 { background: var(--p5); }
+    .swatch.p6 { background: var(--p6); }
+    .swatch.route {
+      height: 0;
+      border: 0;
+      border-top: 3px solid var(--route);
+      border-radius: 0;
+    }
+
+    .zoom-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .zoom-control input {
+      width: 112px;
+      accent-color: var(--focus);
+    }
+
+    .map-viewport {
+      position: relative;
+      overflow: auto;
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0)),
+        #eef2f6;
+    }
+
+    canvas {
+      display: block;
+      cursor: crosshair;
+    }
+
+    .tooltip {
+      position: absolute;
+      z-index: 4;
+      display: none;
+      max-width: 260px;
+      padding: 8px 9px;
+      border: 1px solid #aeb9c8;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 10px 24px rgba(28, 36, 48, 0.15);
+      pointer-events: none;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .tooltip strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 12px;
+    }
+
+    aside {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .side-head {
+      padding: 16px 16px 12px;
+      border-bottom: 1px solid var(--panel-border);
+      background: #fbfcfe;
+    }
+
+    .side-head h2 {
+      margin: 0 0 7px;
+      font-size: 17px;
+      line-height: 1.2;
+    }
+
+    .side-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .side-scroll {
+      overflow: auto;
+      padding: 14px 16px 18px;
+    }
+
+    .section {
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #e7ebf1;
+    }
+
+    .section:last-child {
+      border-bottom: 0;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      line-height: 1.2;
+      text-transform: uppercase;
+      color: #4c5c70;
+    }
+
+    .phase-summary {
+      display: grid;
+      gap: 8px;
+    }
+
+    .summary-line {
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .summary-line span:first-child {
+      color: var(--muted);
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .metric {
+      min-height: 60px;
+      padding: 10px;
+      border: 1px solid #e1e6ee;
+      border-radius: 8px;
+      background: #fbfcfe;
+    }
+
+    .metric .value {
+      display: block;
+      font-size: 18px;
+      font-weight: 760;
+      line-height: 1.1;
+    }
+
+    .metric .label {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .platform-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .platform-table th,
+    .platform-table td {
+      padding: 6px 5px;
+      border-bottom: 1px solid #e7ebf1;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .platform-table th:first-child,
+    .platform-table td:first-child {
+      text-align: left;
+      white-space: normal;
+    }
+
+    .platform-table th {
+      color: var(--muted);
+      font-weight: 650;
+      background: #fbfcfe;
+      position: sticky;
+      top: 0;
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .selected-card {
+      display: grid;
+      gap: 7px;
+      padding: 11px;
+      border: 1px solid #dfe5ee;
+      border-radius: 8px;
+      background: #fbfcfe;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .selected-card strong {
+      font-size: 13px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      min-height: 22px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #eef2f6;
+      color: #4c5c70;
+      font-size: 11px;
+      font-weight: 690;
+    }
+
+    @media (max-width: 980px) {
+      body {
+        overflow: auto;
+      }
+
+      .app {
+        height: auto;
+      }
+
+      header {
+        grid-template-columns: 1fr;
+        align-items: start;
+      }
+
+      .top-actions {
+        justify-content: flex-start;
+      }
+
+      main {
+        grid-template-columns: 1fr;
+        grid-template-rows: 68vh auto;
+      }
+
+      aside {
+        min-height: 620px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Stage 1 Phase 6 Map Preview</h1>
+        <p class="subtitle">현재 `MVPJumpScene.unity`의 phase 1-3 배치를 읽어 기반으로 삼고, phase 4-6 후보 구성을 웹에서 검토하기 위한 시안입니다. Unity 씬과 게임 코드는 수정하지 않았습니다.</p>
+      </div>
+      <div class="top-actions" aria-label="Phase focus controls">
+        <button type="button" data-focus="1">P1</button>
+        <button type="button" data-focus="2">P2</button>
+        <button type="button" data-focus="3">P3</button>
+        <button type="button" data-focus="4" class="active">P4</button>
+        <button type="button" data-focus="5">P5</button>
+        <button type="button" data-focus="6">P6</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="map-shell" aria-label="Map canvas">
+        <div class="map-toolbar">
+          <div class="legend">
+            <span class="legend-item"><span class="swatch current"></span>현재 씬</span>
+            <span class="legend-item"><span class="swatch p4"></span>Phase 4 제안</span>
+            <span class="legend-item"><span class="swatch p5"></span>Phase 5 제안</span>
+            <span class="legend-item"><span class="swatch p6"></span>Phase 6 제안</span>
+            <span class="legend-item"><span class="swatch route"></span>권장 진행선</span>
+          </div>
+          <div class="top-actions">
+            <label class="toggle"><input id="toggleCurrent" type="checkbox" checked> 현재 씬</label>
+            <label class="toggle"><input id="toggleProposed" type="checkbox" checked> 제안</label>
+            <label class="toggle"><input id="toggleRoute" type="checkbox" checked> 진행선</label>
+            <label class="zoom-control">Zoom <input id="zoom" type="range" min="8" max="18" step="0.5" value="12.5"></label>
+          </div>
+        </div>
+        <div id="mapViewport" class="map-viewport">
+          <canvas id="mapCanvas" aria-label="Stage 1 map preview"></canvas>
+          <div id="tooltip" class="tooltip"></div>
+        </div>
+      </section>
+
+      <aside aria-label="Phase details">
+        <div class="side-head">
+          <h2 id="phaseTitle">Phase 4: 벽 상단 전환</h2>
+          <p id="phaseSubtitle">기존 phase 3 종점에서 시작해 우측 분리벽 상단을 넘는 전환 구간입니다.</p>
+        </div>
+        <div class="side-scroll">
+          <section class="section">
+            <h3>설계 요약</h3>
+            <div id="phaseSummary" class="phase-summary"></div>
+          </section>
+
+          <section class="section">
+            <h3>튜닝 기준</h3>
+            <div class="metric-grid">
+              <div class="metric"><span class="value">21.5</span><span class="label">현재 최대 점프 파워</span></div>
+              <div class="metric"><span class="value">-24</span><span class="label">Physics2D gravity.y</span></div>
+              <div class="metric"><span class="value">0.6</span><span class="label">플레이어 한 변 길이</span></div>
+              <div class="metric"><span class="value">0.5</span><span class="label">벽 튕김 탄성</span></div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h3>선택한 발판</h3>
+            <div id="selectedCard" class="selected-card">
+              <span class="pill">Hover</span>
+              <strong>맵 위 발판에 마우스를 올리면 좌표가 표시됩니다.</strong>
+              <span>좌표는 Unity 월드 좌표 기준입니다.</span>
+            </div>
+          </section>
+
+          <section class="section">
+            <h3>후보 좌표</h3>
+            <div id="platformTableWrap"></div>
+          </section>
+
+          <section class="section">
+            <h3>메모</h3>
+            <p class="note">P4는 기존 벽 높이를 활용해 시야와 루트를 정리하고, P5는 우측 좁은 통로에서 벽 튕김을 안정적으로 익히게 합니다. P6는 좁은 통로에서 빠져나와 Stage 1의 종합 점프 체크로 마무리하는 구성이 좋습니다.</p>
+          </section>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    const currentCsv = `name,x,y,w,h,scaleX,scaleY,rot,shape
+Floor,0.0000,-500.4804,1000.0000,1000.0000,1000.0000,1000.0000,0.0,0
+Platform_01 (4),-1.6700,-0.1300,2.0211,2.1712,2.0211,2.1712,0.0,0
+Platform_01 (6),-1.6700,-0.1300,2.0211,2.1712,2.0211,2.1712,0.0,0
+Platform_01 (5),-4.7400,0.0830,4.6730,3.8424,4.6730,3.8424,0.0,0
+Platform_01 (9),9.5828,1.0016,13.5790,0.8129,13.5790,0.8129,0.0,0
+Platform_01 (7),-7.7400,2.0220,4.6730,6.0400,4.6730,6.0400,0.0,0
+Platform_01 (3),6.7800,2.1302,4.6730,2.4958,4.6730,2.4958,0.0,0
+Platform_01 (10),11.1431,3.6870,9.5826,3.3713,9.5826,3.3713,0.0,0
+Platform_01 (11),12.3159,4.9468,7.2494,8.6456,1.0000,1.0000,0.0,0
+Platform_01 (8),-11.2400,5.4706,4.6730,12.6410,4.6730,12.6410,0.0,0
+Platform_01 (12),1.7400,13.4100,7.5955,1.5772,7.5955,1.5772,0.0,0
+Platform_01 (14),10.5200,19.1684,7.5955,0.7337,7.5955,0.7337,0.0,0
+Platform_01 (15),4.9598,22.5900,9.8750,0.7337,9.8750,0.7337,0.0,0
+Platform_01 (13),-0.8900,23.6435,2.3690,21.9974,1.0000,1.0000,0.0,0
+Platform_01 (16),14.3932,27.2400,3.6290,0.7337,1.0000,1.0000,0.0,0
+Platform_01 (17),8.8800,28.6100,3.1547,0.7337,3.1547,0.7337,0.0,0
+Platform_01 (18),4.0572,30.6600,3.1546,0.7337,3.1546,0.7337,0.0,0
+Platform_01 (19),-0.4659,32.6000,3.0767,0.7337,3.0767,0.7337,0.0,3
+Platform_01 (21),9.1600,39.0600,4.0490,0.7337,4.0490,0.7337,0.0,0
+Platform_01 (22),-9.8398,41.6400,10.6452,1.2646,10.6452,1.2646,0.0,0
+Platform_01 (23),14.3182,44.1200,3.5125,0.7337,3.5125,0.7337,0.0,0
+Platform_01 (30),-14.1500,47.6000,3.5125,0.7337,3.5125,0.7337,0.0,0
+Platform_01 (24),4.6600,48.1800,3.5125,0.7337,3.5125,0.7337,0.0,0
+Platform_01 (25),-1.8590,49.8900,5.4907,0.7337,5.4907,0.7337,0.0,0
+Platform_01 (20),-5.6100,51.9900,2.3690,21.9974,2.3690,21.9974,0.0,0
+Platform_01 (31),-6.8600,52.2600,3.5125,0.7337,3.5125,0.7337,0.0,0
+Platform_01 (26),8.8605,54.2800,11.1731,0.7337,11.1731,0.7337,0.0,0
+Platform_01 (27),10.8189,56.1570,6.8902,3.5735,6.8902,3.5735,0.0,0
+Platform_01 (32),-13.3781,58.9800,4.8765,0.7337,4.8765,0.7337,0.0,0
+Platform_01 (28),13.2700,59.9200,4.5427,5.4993,1.0000,1.0000,0.0,0
+Platform_01 (33),-9.2100,64.8600,3.5125,0.7337,1.0000,1.0000,0.0,0
+Platform_01 (29),0.8800,66.0700,3.5125,0.7337,3.5125,0.7337,0.0,0
+Platform_01 (34),-9.4000,70.2400,3.5125,0.8065,3.5125,0.8065,0.0,0
+Platform_01 (36),-9.3500,75.4400,3.5125,0.8065,3.5125,0.8065,0.0,0
+Platform_01 (50),-3.4942,77.1217,3.7603,2.8606,3.7603,2.8606,0.0,0
+Platform_01 (48),1.4566,77.4200,3.0421,0.8065,1.0000,1.0000,0.0,0
+Platform_01 (47),12.1993,77.5700,6.4221,0.8065,6.4221,0.8065,0.0,0
+Platform_01 (37),-9.3700,78.1400,3.5125,0.8065,1.0000,1.0000,0.0,0
+Platform_01 (35),-6.3200,78.1774,2.8434,16.6815,1.0000,1.0000,0.0,0
+Platform_01 (49),-2.5400,83.1560,1.8688,6.5853,1.8688,6.5853,0.0,0
+Platform_01 (38),-12.3440,84.0000,5.1531,4.8463,5.1531,4.8463,0.0,0
+Platform_01 (39),-1.1200,89.4500,2.5406,0.8065,1.0000,1.0000,0.0,0
+Platform_01 (40),4.5000,92.4900,2.5406,0.8065,1.0000,1.0000,0.0,0
+Platform_01 (2),-14.6000,92.7974,2.6000,191.9403,2.6000,191.9403,0.0,0
+Platform_01 (41),-10.1810,95.0234,7.6637,9.5216,1.0000,1.0000,0.0,0
+Platform_01 (1),15.1800,95.1096,2.6000,188.8332,2.6000,188.8332,0.0,0
+Platform_01 (45),9.7400,95.2500,2.5406,0.8065,2.5406,0.8065,0.0,0
+Platform_01 (42),22.7200,95.9123,2.1031,193.6595,2.1031,193.6595,0.0,0
+Platform (1),1.8000,96.6000,3.5080,1.4726,1.0000,1.0000,0.0,0
+Platform_01 (46),14.2300,98.2800,2.6600,0.8065,2.6600,0.8065,0.0,0
+Platform_01 (52),4.6800,102.7914,3.5367,6.4962,1.0000,1.0000,0.0,0
+Platform_01 (57),12.2100,104.0600,3.5367,3.1908,1.0000,1.0000,0.0,0
+Platform_01 (58),-5.1600,104.3200,3.5367,3.1908,1.0000,1.0000,0.0,0
+Platform_01 (56),-11.7300,106.1500,3.5367,3.1908,1.0000,1.0000,0.0,0
+Platform_01 (63),-0.5926,109.3100,13.9959,0.7840,1.0000,1.0000,0.0,0
+Platform_01 (64),5.8800,111.8455,1.0579,5.8201,1.0000,1.0000,0.0,0
+Platform_01 (65),-5.1794,113.4260,16.5627,2.0412,1.0000,1.0000,0.0,0
+Platform_01 (54),7.3800,114.3100,2.2191,0.8755,1.0000,1.0000,0.0,0
+Platform_01 (62),-1.9400,117.1100,2.2301,2.1413,1.0000,1.0000,0.0,0
+Platform_01 (55),-9.7800,117.5400,4.5006,4.1547,1.0000,1.0000,0.0,0
+Platform_01 (59),11.7800,120.8000,2.1543,0.7200,1.0000,1.0000,0.0,0
+Platform_01 (51),-4.8400,120.8100,3.5367,3.1908,1.0000,1.0000,0.0,0
+Platform_01 (70),-10.0500,124.9900,4.0722,3.7263,1.0000,1.0000,0.0,0
+Platform_01 (53),2.3710,125.2644,1.4524,21.6636,1.0000,1.0000,0.0,0
+Platform_01 (68),-2.3300,125.5600,3.5367,3.1908,1.0000,1.0000,0.0,0
+Platform_01 (66),5.2400,127.0400,2.1543,0.7200,1.0000,1.0000,0.0,0
+Platform_01 (69),-3.9200,129.7500,3.5367,3.1908,1.0000,1.0000,0.0,0
+Platform_01 (73),-9.6400,131.5900,4.1151,3.6192,1.0000,1.0000,0.0,0
+Platform_01 (67),11.9300,133.8500,2.1543,0.7200,1.0000,1.0000,0.0,0
+Platform_01 (75),-6.7600,135.8700,2.1230,1.9913,1.0000,1.0000,0.0,0
+Platform (2),2.9700,136.2700,2.5000,0.3000,1.0000,1.0000,0.0,1
+Platform_01 (71),-2.4392,137.5114,4.1151,3.5336,1.0000,1.0000,0.0,0
+Platform_01 (74),-10.4098,140.9241,2.6371,2.4626,1.0000,1.0000,0.0,0
+Platform_01 (72),1.5700,141.6100,3.5367,3.1908,1.0000,1.0000,0.0,0
+Platform_01 (78),8.6500,143.6200,3.5367,3.1908,1.0000,1.0000,0.0,0
+Platform_01 (76),-5.1900,144.7700,4.6934,4.5832,1.0000,1.0000,0.0,0
+Platform_01 (79),0.9700,145.6735,2.1873,2.7410,1.0000,1.0000,0.0,0
+Platform_01 (82),7.1740,146.9400,2.9579,0.4252,1.0000,1.0000,0.0,0
+Platform_01 (83),11.2627,149.0500,2.9444,0.4252,1.0000,1.0000,0.0,0
+Platform_01 (80),6.8929,150.1296,2.4015,6.8108,1.0000,1.0000,0.0,0
+Platform_01 (81),12.1000,150.1828,3.5367,6.7252,1.0000,1.0000,0.0,0
+Platform_01 (84),7.2273,150.8400,2.9444,0.4252,1.0000,1.0000,0.0,0
+Platform_01 (77),-3.7050,152.8115,19.1734,1.5201,1.0000,1.0000,0.0,0`;
+
+    const proposed = [
+      { name: "P4-01 Launch shelf", x: 3.8, y: 157.6, w: 3.2, h: 0.55, phase: 4, shape: 0, note: "phase 3 종점에서 우측으로 시선을 열어 주는 첫 발판" },
+      { name: "P4-02 Timing ledge", x: 9.4, y: 161.9, w: 2.6, h: 0.5, phase: 4, shape: 0, note: "최대 파워가 아니어도 닿는 중거리 우측 점프" },
+      { name: "P4-03 Return notch", x: 5.0, y: 166.5, w: 2.2, h: 0.5, phase: 4, shape: 0, note: "반대 방향 조준을 요구하는 짧은 되돌림" },
+      { name: "P4-04 Reset island", x: -1.6, y: 171.4, w: 4.2, h: 0.62, phase: 4, shape: 0, note: "실패 후 재정렬하기 쉬운 넓은 쉼표" },
+      { name: "P4-05 Mid step", x: 5.9, y: 176.2, w: 2.0, h: 0.48, phase: 4, shape: 0, note: "다음 벽 상단 접근을 위한 작은 발판" },
+      { name: "P4-06 Right catch", x: 11.9, y: 181.0, w: 2.6, h: 0.5, phase: 4, shape: 0, note: "기존 우측 벽 왼쪽 면과 함께 압박감을 주는 캐치" },
+      { name: "P4-07 Over-wall prep", x: 7.7, y: 185.8, w: 3.4, h: 0.58, phase: 4, shape: 0, note: "분리벽 상단을 넘기 전 마지막 안정 발판" },
+      { name: "P4-08 Wall-top cap", x: 13.4, y: 190.2, w: 2.0, h: 0.48, phase: 4, shape: 0, note: "기존 x15 벽 상단을 넘는 관문" },
+      { name: "P4-09 Gate pocket", x: 17.7, y: 194.4, w: 2.4, h: 0.48, phase: 4, shape: 0, note: "우측 통로에 진입했음을 알리는 작은 포켓" },
+      { name: "P4-10 Corridor rest", x: 20.4, y: 199.0, w: 2.8, h: 0.55, phase: 4, shape: 0, note: "phase 5 벽튕김 구간 직전의 정지 발판" },
+
+      { name: "P5-WL Left wall extension", x: 15.18, y: 225.0, w: 1.6, h: 64.0, phase: 5, shape: 0, kind: "wall", note: "우측 통로 왼쪽 경계. y 193 이후 새로 연장하는 후보" },
+      { name: "P5-WR Right wall extension", x: 22.72, y: 225.0, w: 1.6, h: 64.0, phase: 5, shape: 0, kind: "wall", note: "우측 통로 바깥 경계. 벽 튕김 리듬을 일정하게 유지" },
+      { name: "P5-01 Entry shelf", x: 18.1, y: 204.0, w: 2.0, h: 0.5, phase: 5, shape: 0, note: "좁은 통로 첫 착지" },
+      { name: "P5-02 Right ping", x: 21.0, y: 209.4, w: 1.6, h: 0.46, phase: 5, shape: 0, note: "오른쪽 벽 근처에서 튕김 타이밍 확인" },
+      { name: "P5-03 Left ping", x: 17.4, y: 214.8, w: 1.9, h: 0.46, phase: 5, shape: 0, note: "왼쪽 경계로 되돌아오는 짧은 착지" },
+      { name: "P5-T1 Kicker wedge", x: 16.2, y: 217.6, w: 1.2, h: 1.6, phase: 5, shape: 2, note: "벽에 붙었을 때 미끄러지듯 빠져나오는 보조 삼각형" },
+      { name: "P5-04 Right skim", x: 20.8, y: 220.2, w: 1.5, h: 0.46, phase: 5, shape: 0, note: "게이지를 과충전하면 벽에 부딪히는 짧은 발판" },
+      { name: "P5-05 Left catch", x: 17.6, y: 225.6, w: 1.8, h: 0.46, phase: 5, shape: 0, note: "벽 튕김 후 수평 속도를 끊는 캐치" },
+      { name: "P5-06 Right catch", x: 21.1, y: 231.0, w: 1.4, h: 0.46, phase: 5, shape: 0, note: "상승 폭은 작고 좌우 조준이 핵심인 발판" },
+      { name: "P5-T2 Brake wedge", x: 21.9, y: 233.8, w: 1.2, h: 1.6, phase: 5, shape: 4, note: "오른쪽 과진입을 줄이는 보조 삼각형" },
+      { name: "P5-07 Center rest", x: 18.0, y: 236.6, w: 2.0, h: 0.5, phase: 5, shape: 0, note: "통로 중간 체크포인트 역할" },
+      { name: "P5-08 Exit bridge", x: 20.5, y: 242.3, w: 3.3, h: 0.6, phase: 5, shape: 0, note: "우측 통로에서 상단 출구로 나가는 넓은 받침" },
+      { name: "P5-09 Crossback ledge", x: 14.0, y: 247.3, w: 3.8, h: 0.6, phase: 5, shape: 0, note: "분리벽 위를 넘어 다시 중앙부로 돌아오는 발판" },
+      { name: "P5-10 Checkpoint deck", x: 9.3, y: 251.5, w: 4.8, h: 0.7, phase: 5, shape: 0, note: "phase 6 진입 전 넓은 정렬 지점" },
+
+      { name: "P6-WL Outer left wall", x: -14.6, y: 280.0, w: 1.6, h: 55.0, phase: 6, shape: 0, kind: "wall", note: "최종 구간 좌측 경계 후보" },
+      { name: "P6-WR Outer right wall", x: 22.7, y: 280.0, w: 1.6, h: 55.0, phase: 6, shape: 0, kind: "wall", note: "최종 구간 우측 경계 후보" },
+      { name: "P6-01 Mid opener", x: 4.0, y: 256.5, w: 3.0, h: 0.55, phase: 6, shape: 0, note: "우측 통로에서 열린 공간으로 나오는 첫 점프" },
+      { name: "P6-02 Left drift", x: -3.5, y: 261.6, w: 2.8, h: 0.5, phase: 6, shape: 0, note: "큰 좌향 점프. Stage 1 후반의 방향 전환 체크" },
+      { name: "P6-03 Wall timing", x: -10.8, y: 266.4, w: 2.6, h: 0.5, phase: 6, shape: 0, note: "좌측 벽 근처에서 튕김을 선택적으로 활용" },
+      { name: "P6-04 Return step", x: -5.2, y: 271.8, w: 2.4, h: 0.48, phase: 6, shape: 0, note: "좌측 과진입을 복구하는 중간 발판" },
+      { name: "P6-05 Center step", x: 2.0, y: 276.8, w: 2.3, h: 0.48, phase: 6, shape: 0, note: "중앙 회복 지점" },
+      { name: "P6-06 Right step", x: 9.1, y: 281.5, w: 2.1, h: 0.48, phase: 6, shape: 0, note: "짧은 발판으로 정확도 요구" },
+      { name: "P6-07 Upper right", x: 14.0, y: 286.9, w: 2.2, h: 0.48, phase: 6, shape: 0, note: "마지막 S 커브의 우측 기준점" },
+      { name: "P6-T1 Final wedge", x: 17.2, y: 291.2, w: 3.0, h: 1.8, phase: 6, shape: 1, note: "위쪽으로 튀어 오르는 느낌을 주는 삼각형 받침" },
+      { name: "P6-08 Upper bridge", x: 10.8, y: 294.0, w: 3.6, h: 0.6, phase: 6, shape: 0, note: "최종 패드 직전 넓은 안정 발판" },
+      { name: "P6-09 Final approach", x: 3.5, y: 298.0, w: 2.8, h: 0.54, phase: 6, shape: 0, note: "마지막 방향 반전" },
+      { name: "P6-10 Stage clear pad", x: -5.0, y: 302.7, w: 10.5, h: 0.85, phase: 6, shape: 0, note: "Stage 1 종료 또는 다음 스테이지 진입용 넓은 패드" }
+    ];
+
+    const phaseInfo = {
+      1: {
+        title: "Phase 1: 기본 조준과 착지",
+        subtitle: "현재 씬 하단부입니다. 넓은 발판과 낮은 높이 차로 입력 순서를 익힙니다.",
+        range: "y 0-50",
+        goal: "게이지 잠금, 각도 잠금, 착지 리듬을 안정화합니다.",
+        pattern: "넓은 플랫폼, 낮은 점프, 첫 삼각형 발판",
+        risk: "하단 벽과 발판이 겹쳐 보이는 구간은 나중에 시각 정리가 필요합니다."
+      },
+      2: {
+        title: "Phase 2: 좌우 전환과 좁은 발판",
+        subtitle: "현재 씬 중단부입니다. 좌우 이동 폭이 커지고 벽 근처 착지가 늘어납니다.",
+        range: "y 50-100",
+        goal: "연속 방향 전환과 중거리 착지를 훈련합니다.",
+        pattern: "좌측 기둥, 중앙 복귀 발판, 우측 벽 근처 캐치",
+        risk: "x -14.6, x 15.18 벽이 강한 경계 역할을 하므로 카메라 framing 확인이 필요합니다."
+      },
+      3: {
+        title: "Phase 3: 장애물 밀도 상승",
+        subtitle: "현재 제작된 상단부입니다. 중앙 기둥과 블록형 발판으로 루트를 좁힙니다.",
+        range: "y 100-154",
+        goal: "점프 파워 조절과 짧은 회복 발판 활용을 요구합니다.",
+        pattern: "좁은 캐치, 높은 블록, phase 종료용 넓은 데크",
+        risk: "phase 4로 넘어갈 때 x 15 벽 상단을 어떻게 사용할지 결정해야 합니다."
+      },
+      4: {
+        title: "Phase 4: 벽 상단 전환",
+        subtitle: "기존 phase 3 종점에서 시작해 우측 분리벽 상단을 넘는 전환 구간입니다.",
+        range: "y 154-203",
+        goal: "현재 넓은 종점 데크를 출발점으로 삼아 우측 통로 진입을 자연스럽게 만듭니다.",
+        pattern: "중앙부 S 커브, 분리벽 상단 넘기, 우측 포켓 착지",
+        risk: "x 15.18 기존 벽이 y 약 189에서 끝나므로, 상단 통과 높이를 너무 낮게 잡으면 충돌 스트레스가 커집니다."
+      },
+      5: {
+        title: "Phase 5: 우측 통로 벽튕김",
+        subtitle: "x 15-23 사이 좁은 통로를 사용해 벽 튕김을 본격적으로 연습합니다.",
+        range: "y 203-254",
+        goal: "짧은 좌우 왕복과 벽 튕김 탄성 0.5를 이용한 회복 루트를 만듭니다.",
+        pattern: "양쪽 벽 확장, 짧은 교차 발판, 중간 체크포인트, 중앙 복귀",
+        risk: "통로 폭이 좁으므로 작은 발판은 1.4-2.0 unit 선에서 유지하고, 중간에 넓은 회복 발판을 둡니다."
+      },
+      6: {
+        title: "Phase 6: Stage 1 종합 체크",
+        subtitle: "좁은 통로에서 열린 공간으로 빠져나와 Stage 1의 마지막 루프를 완성합니다.",
+        range: "y 254-304",
+        goal: "큰 좌우 이동, 선택적 벽튕김, 마지막 정밀 점프를 한 번에 검증합니다.",
+        pattern: "좌측 큰 드리프트, 중앙 회복, 우측 상단 S 커브, 넓은 종료 패드",
+        risk: "Stage 1 마지막 구간이므로 새 규칙을 추가하기보다 기존 조작의 조합으로 난이도를 올립니다."
+      }
+    };
+
+    const phaseBands = [
+      { phase: 1, min: 0, max: 50, color: "rgba(43, 53, 68, 0.035)" },
+      { phase: 2, min: 50, max: 100, color: "rgba(43, 53, 68, 0.055)" },
+      { phase: 3, min: 100, max: 154, color: "rgba(43, 53, 68, 0.035)" },
+      { phase: 4, min: 154, max: 203, color: "rgba(224, 95, 67, 0.08)" },
+      { phase: 5, min: 203, max: 254, color: "rgba(17, 136, 120, 0.08)" },
+      { phase: 6, min: 254, max: 304, color: "rgba(194, 138, 11, 0.10)" }
+    ];
+
+    const routePoints = [
+      [-3.7, 153.6], [3.8, 157.9], [9.4, 162.2], [5.0, 166.8],
+      [-1.6, 171.7], [5.9, 176.5], [11.9, 181.3], [7.7, 186.1],
+      [13.4, 190.5], [17.7, 194.7], [20.4, 199.3], [18.1, 204.3],
+      [21.0, 209.6], [17.4, 215.0], [20.8, 220.4], [17.6, 225.8],
+      [21.1, 231.2], [18.0, 236.9], [20.5, 242.6], [14.0, 247.6],
+      [9.3, 251.9], [4.0, 256.8], [-3.5, 261.9], [-10.8, 266.7],
+      [-5.2, 272.0], [2.0, 277.0], [9.1, 281.7], [14.0, 287.1],
+      [17.2, 292.1], [10.8, 294.3], [3.5, 298.3], [-5.0, 303.1]
+    ];
+
+    const world = {
+      xMin: -17,
+      xMax: 25,
+      yMin: -2,
+      yMax: 306,
+      padLeft: 54,
+      padTop: 34,
+      padRight: 26,
+      padBottom: 44
+    };
+
+    const colors = {
+      current: getCss("--current"),
+      currentSoft: getCss("--current-soft"),
+      route: getCss("--route"),
+      phase4: getCss("--p4"),
+      phase5: getCss("--p5"),
+      phase6: getCss("--p6"),
+      grid: getCss("--grid"),
+      gridStrong: getCss("--grid-strong"),
+      danger: getCss("--danger")
+    };
+
+    const canvas = document.getElementById("mapCanvas");
+    const ctx = canvas.getContext("2d");
+    const viewport = document.getElementById("mapViewport");
+    const tooltip = document.getElementById("tooltip");
+    const currentToggle = document.getElementById("toggleCurrent");
+    const proposedToggle = document.getElementById("toggleProposed");
+    const routeToggle = document.getElementById("toggleRoute");
+    const zoom = document.getElementById("zoom");
+    const currentPlatforms = parsePlatforms(currentCsv);
+    let activePhase = 4;
+    let scale = Number(zoom.value);
+    let canvasCssWidth = 0;
+    let canvasCssHeight = 0;
+    let hitRegions = [];
+
+    setup();
+
+    function setup() {
+      renderPhaseDetails(activePhase);
+      resizeCanvas();
+      focusPhase(activePhase, false);
+
+      window.addEventListener("resize", () => resizeCanvas());
+      currentToggle.addEventListener("change", draw);
+      proposedToggle.addEventListener("change", draw);
+      routeToggle.addEventListener("change", draw);
+      zoom.addEventListener("input", () => {
+        const topWorld = screenToWorld(0, viewport.scrollTop + 80).y;
+        scale = Number(zoom.value);
+        resizeCanvas();
+        viewport.scrollTop = Math.max(0, worldToScreen(0, topWorld).y - 80);
+      });
+
+      document.querySelectorAll("[data-focus]").forEach((button) => {
+        button.addEventListener("click", () => {
+          activePhase = Number(button.dataset.focus);
+          document.querySelectorAll("[data-focus]").forEach((item) => item.classList.toggle("active", item === button));
+          renderPhaseDetails(activePhase);
+          draw();
+          focusPhase(activePhase, true);
+        });
+      });
+
+      viewport.addEventListener("mousemove", onMouseMove);
+      viewport.addEventListener("mouseleave", () => {
+        tooltip.style.display = "none";
+      });
+    }
+
+    function parsePlatforms(csv) {
+      const lines = csv.trim().split("\n");
+      const headers = lines.shift().split(",");
+      return lines.map((line) => {
+        const parts = line.split(",");
+        const item = {};
+        headers.forEach((header, index) => {
+          item[header] = index === 0 ? parts[index] : Number(parts[index]);
+        });
+        item.phase = inferPhase(item.y);
+        item.source = "current";
+        item.note = "현재 씬에서 추출한 발판";
+        return item;
+      });
+    }
+
+    function inferPhase(y) {
+      if (y < 50) return 1;
+      if (y < 100) return 2;
+      if (y < 154) return 3;
+      if (y < 203) return 4;
+      if (y < 254) return 5;
+      return 6;
+    }
+
+    function resizeCanvas() {
+      const width = (world.xMax - world.xMin) * scale + world.padLeft + world.padRight;
+      const height = (world.yMax - world.yMin) * scale + world.padTop + world.padBottom;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvasCssWidth = Math.round(width);
+      canvasCssHeight = Math.round(height);
+      canvas.style.width = `${canvasCssWidth}px`;
+      canvas.style.height = `${canvasCssHeight}px`;
+      canvas.width = Math.round(canvasCssWidth * dpr);
+      canvas.height = Math.round(canvasCssHeight * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      draw();
+    }
+
+    function draw() {
+      hitRegions = [];
+      ctx.clearRect(0, 0, canvasCssWidth, canvasCssHeight);
+      drawBackground();
+      if (currentToggle.checked) {
+        currentPlatforms.forEach((platform) => drawPlatform(platform, false));
+      }
+      if (proposedToggle.checked) {
+        proposed.forEach((platform) => drawPlatform(platform, true));
+      }
+      if (routeToggle.checked) {
+        drawRoute();
+      }
+      drawPlayer();
+      drawAxes();
+    }
+
+    function drawBackground() {
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillRect(0, 0, canvasCssWidth, canvasCssHeight);
+
+      phaseBands.forEach((band) => {
+        const top = worldToScreen(world.xMin, band.max).y;
+        const bottom = worldToScreen(world.xMin, band.min).y;
+        ctx.fillStyle = band.color;
+        ctx.fillRect(world.padLeft, top, plotWidth(), bottom - top);
+        ctx.fillStyle = band.phase === activePhase ? "#1c2430" : "#6d7888";
+        ctx.font = band.phase === activePhase ? "700 13px system-ui" : "600 12px system-ui";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText(`PHASE ${band.phase}`, world.padLeft + 10, top + 8);
+      });
+
+      for (let x = -15; x <= 25; x += 5) {
+        const sx = worldToScreen(x, 0).x;
+        ctx.strokeStyle = x % 10 === 0 ? colors.gridStrong : colors.grid;
+        ctx.lineWidth = x % 10 === 0 ? 1.2 : 1;
+        line(sx, world.padTop, sx, canvasCssHeight - world.padBottom);
+      }
+
+      for (let y = 0; y <= 305; y += 5) {
+        const sy = worldToScreen(0, y).y;
+        ctx.strokeStyle = y % 10 === 0 ? colors.gridStrong : colors.grid;
+        ctx.lineWidth = y % 10 === 0 ? 1.2 : 1;
+        line(world.padLeft, sy, canvasCssWidth - world.padRight, sy);
+        if (y % 25 === 0) {
+          ctx.fillStyle = "#718094";
+          ctx.font = "11px system-ui";
+          ctx.textAlign = "right";
+          ctx.textBaseline = "middle";
+          ctx.fillText(`${y}`, world.padLeft - 10, sy);
+        }
+      }
+    }
+
+    function drawAxes() {
+      ctx.strokeStyle = "#9aa8ba";
+      ctx.lineWidth = 1.4;
+      line(world.padLeft, canvasCssHeight - world.padBottom, canvasCssWidth - world.padRight, canvasCssHeight - world.padBottom);
+      line(world.padLeft, world.padTop, world.padLeft, canvasCssHeight - world.padBottom);
+      ctx.fillStyle = "#5f6d7f";
+      ctx.font = "12px system-ui";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      for (let x = -15; x <= 25; x += 5) {
+        const sx = worldToScreen(x, 0).x;
+        ctx.fillText(`${x}`, sx, canvasCssHeight - world.padBottom + 14);
+      }
+    }
+
+    function drawPlatform(platform, isProposed) {
+      const color = getPlatformColor(platform, isProposed);
+      const topLeft = worldToScreen(platform.x - platform.w / 2, platform.y + platform.h / 2);
+      const bottomRight = worldToScreen(platform.x + platform.w / 2, platform.y - platform.h / 2);
+      const x = topLeft.x;
+      const y = topLeft.y;
+      const w = bottomRight.x - topLeft.x;
+      const h = bottomRight.y - topLeft.y;
+      const isWall = platform.kind === "wall" || platform.h > 35;
+
+      ctx.save();
+      ctx.globalAlpha = isProposed ? 0.92 : 0.78;
+      if (isWall && isProposed) {
+        ctx.setLineDash([7, 5]);
+        ctx.fillStyle = "rgba(154, 58, 58, 0.10)";
+        ctx.strokeStyle = colors.danger;
+      } else {
+        ctx.setLineDash([]);
+        ctx.fillStyle = isProposed ? addAlpha(color, 0.82) : addAlpha(color, platform.name === "Floor" ? 0.12 : 0.82);
+        ctx.strokeStyle = isProposed ? color : "#1c2430";
+      }
+
+      ctx.lineWidth = isProposed ? 1.8 : 1.1;
+      if (platform.shape && platform.shape !== 0) {
+        drawTriangle(platform, x, y, w, h, color, isProposed);
+      } else {
+        roundRect(x, y, w, h, 3);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      if (isProposed && platform.kind !== "wall") {
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "700 10px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(platform.name.replace(/^P(\d)-/, "P$1 "), x + w / 2, y + h / 2);
+      }
+
+      hitRegions.push({ platform, x, y, w, h });
+    }
+
+    function drawTriangle(platform, x, y, w, h, color, isProposed) {
+      ctx.beginPath();
+      if (platform.shape === 1) {
+        ctx.moveTo(x + w / 2, y);
+        ctx.lineTo(x + w, y + h);
+        ctx.lineTo(x, y + h);
+      } else if (platform.shape === 2) {
+        ctx.moveTo(x + w, y + h / 2);
+        ctx.lineTo(x, y);
+        ctx.lineTo(x, y + h);
+      } else if (platform.shape === 3) {
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + w, y);
+        ctx.lineTo(x + w / 2, y + h);
+      } else if (platform.shape === 4) {
+        ctx.moveTo(x, y + h / 2);
+        ctx.lineTo(x + w, y);
+        ctx.lineTo(x + w, y + h);
+      }
+      ctx.closePath();
+      ctx.fillStyle = isProposed ? addAlpha(color, 0.82) : addAlpha(color, 0.82);
+      ctx.strokeStyle = isProposed ? color : "#1c2430";
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    function drawRoute() {
+      ctx.save();
+      ctx.strokeStyle = colors.route;
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([8, 7]);
+      ctx.beginPath();
+      routePoints.forEach(([x, y], index) => {
+        const point = worldToScreen(x, y);
+        if (index === 0) ctx.moveTo(point.x, point.y);
+        else ctx.lineTo(point.x, point.y);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+      routePoints.forEach(([x, y], index) => {
+        if (index % 3 !== 0 && index !== routePoints.length - 1) return;
+        const point = worldToScreen(x, y);
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = colors.route;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    function drawPlayer() {
+      const size = 0.6;
+      const player = { x: 1.0188, y: 0.2448, w: size, h: size };
+      const topLeft = worldToScreen(player.x - player.w / 2, player.y + player.h / 2);
+      const bottomRight = worldToScreen(player.x + player.w / 2, player.y - player.h / 2);
+      ctx.save();
+      ctx.fillStyle = "#1b74d0";
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.5;
+      roundRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y, 3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function onMouseMove(event) {
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const hit = [...hitRegions].reverse().find((region) =>
+        x >= region.x && x <= region.x + region.w && y >= region.y && y <= region.y + region.h
+      );
+      if (!hit) {
+        tooltip.style.display = "none";
+        return;
+      }
+
+      const item = hit.platform;
+      const label = item.source === "current" ? "현재 씬" : `Phase ${item.phase} 제안`;
+      tooltip.innerHTML = `<strong>${escapeHtml(item.name)}</strong>${label}<br>x ${fmt(item.x)}, y ${fmt(item.y)}, w ${fmt(item.w)}, h ${fmt(item.h)}<br>${escapeHtml(item.note || "")}`;
+      tooltip.style.left = `${event.clientX - viewport.getBoundingClientRect().left + viewport.scrollLeft + 14}px`;
+      tooltip.style.top = `${event.clientY - viewport.getBoundingClientRect().top + viewport.scrollTop + 14}px`;
+      tooltip.style.display = "block";
+      renderSelected(item);
+    }
+
+    function renderSelected(item) {
+      const selectedCard = document.getElementById("selectedCard");
+      const source = item.source === "current" ? "현재 씬" : `Phase ${item.phase} 제안`;
+      selectedCard.innerHTML = `
+        <span class="pill">${source}</span>
+        <strong>${escapeHtml(item.name)}</strong>
+        <span>x ${fmt(item.x)}, y ${fmt(item.y)}, width ${fmt(item.w)}, height ${fmt(item.h)}</span>
+        <span>${escapeHtml(item.note || "좌표 확인용 발판입니다.")}</span>
+      `;
+    }
+
+    function renderPhaseDetails(phase) {
+      const info = phaseInfo[phase];
+      document.getElementById("phaseTitle").textContent = info.title;
+      document.getElementById("phaseSubtitle").textContent = info.subtitle;
+      const summary = document.getElementById("phaseSummary");
+      summary.innerHTML = `
+        <div class="summary-line"><span>범위</span><strong>${info.range}</strong></div>
+        <div class="summary-line"><span>목적</span><div>${info.goal}</div></div>
+        <div class="summary-line"><span>패턴</span><div>${info.pattern}</div></div>
+        <div class="summary-line"><span>주의</span><div>${info.risk}</div></div>
+      `;
+
+      const candidates = proposed.filter((item) => item.phase === phase).sort((a, b) => a.y - b.y);
+      const wrap = document.getElementById("platformTableWrap");
+      if (candidates.length === 0) {
+        wrap.innerHTML = `<p class="note">이 phase는 현재 씬 데이터를 기준으로 표시됩니다. 새 후보 좌표는 phase 4-6에만 있습니다.</p>`;
+        return;
+      }
+      wrap.innerHTML = `
+        <table class="platform-table">
+          <thead><tr><th>이름</th><th>x</th><th>y</th><th>w</th><th>h</th></tr></thead>
+          <tbody>
+            ${candidates.map((item) => `
+              <tr>
+                <td>${escapeHtml(item.name)}</td>
+                <td>${fmt(item.x)}</td>
+                <td>${fmt(item.y)}</td>
+                <td>${fmt(item.w)}</td>
+                <td>${fmt(item.h)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function focusPhase(phase, smooth) {
+      const band = phaseBands.find((item) => item.phase === phase);
+      if (!band) return;
+      const y = worldToScreen(0, band.max).y - 56;
+      viewport.scrollTo({ top: Math.max(0, y), left: Math.max(0, worldToScreen(-17, 0).x - 20), behavior: smooth ? "smooth" : "auto" });
+    }
+
+    function getPlatformColor(platform, isProposed) {
+      if (!isProposed) return colors.current;
+      if (platform.phase === 4) return colors.phase4;
+      if (platform.phase === 5) return colors.phase5;
+      return colors.phase6;
+    }
+
+    function worldToScreen(x, y) {
+      return {
+        x: world.padLeft + (x - world.xMin) * scale,
+        y: world.padTop + (world.yMax - y) * scale
+      };
+    }
+
+    function screenToWorld(x, y) {
+      return {
+        x: world.xMin + (x - world.padLeft) / scale,
+        y: world.yMax - (y - world.padTop) / scale
+      };
+    }
+
+    function plotWidth() {
+      return (world.xMax - world.xMin) * scale;
+    }
+
+    function roundRect(x, y, w, h, r) {
+      const radius = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + w - radius, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+      ctx.lineTo(x + w, y + h - radius);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+      ctx.lineTo(x + radius, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    }
+
+    function line(x1, y1, x2, y2) {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
+    function addAlpha(hex, alpha) {
+      const clean = hex.trim();
+      if (!clean.startsWith("#")) return clean;
+      const bigint = parseInt(clean.slice(1), 16);
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function getCss(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function fmt(value) {
+      return Number(value).toFixed(1);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>

@@ -1,3 +1,4 @@
+using System.Globalization;
 using UnityEngine;
 
 public enum PlayerJumpState
@@ -22,6 +23,13 @@ public enum PlayerJumpState
 [RequireComponent(typeof(BoxCollider2D))]
 public class PlayerController : MonoBehaviour
 {
+    private const float CustomJumpButtonWidth = 112f;
+    private const float CustomJumpButtonHeight = 30f;
+    private const float CustomJumpWindowWidth = 220f;
+    private const float CustomJumpWindowHeight = 126f;
+    private const int CustomJumpWindowId = 240624;
+    private static readonly Vector2 CustomJumpButtonWorldOffset = new Vector2(1.1f, 0.55f);
+
     [Header("References")]
     [SerializeField] private JumpInputReader inputReader;
     [SerializeField] private JumpPowerGauge powerGauge;
@@ -48,6 +56,12 @@ public class PlayerController : MonoBehaviour
 
     private float jumpStartedAt;
     private bool hasLeftGround;
+    private bool customJumpWindowOpen;
+    private Rect customJumpWindowRect;
+    private string customJumpAngleText = "0";
+    private string customJumpGaugePercentText = "100";
+    private float customJumpAngle;
+    private float customJumpGaugeNormalized = 1f;
 
     public PlayerJumpState CurrentState => currentState;
     public float LockedPower => lockedPower;
@@ -84,6 +98,10 @@ public class PlayerController : MonoBehaviour
         inputReader.Tick();
 
         bool grounded = groundChecker.CheckGroundedNow();
+        if (UpdateDebugCustomJump(grounded))
+        {
+            return;
+        }
 
         switch (currentState)
         {
@@ -102,6 +120,40 @@ public class PlayerController : MonoBehaviour
             case PlayerJumpState.Jumping:
                 UpdateJumping(grounded);
                 break;
+        }
+    }
+
+    private void OnGUI()
+    {
+        if (!Application.isPlaying || !IsDebugModeEnabled())
+        {
+            return;
+        }
+
+        Rect buttonRect;
+        if (!TryGetCustomJumpButtonRect(out buttonRect))
+        {
+            return;
+        }
+
+        bool canStartCustomJump = CanStartDebugCustomJump();
+        bool previousEnabled = GUI.enabled;
+        GUI.enabled = canStartCustomJump;
+        if (GUI.Button(buttonRect, "Custom Jump"))
+        {
+            OpenDebugCustomJumpWindow(buttonRect);
+        }
+
+        GUI.enabled = previousEnabled;
+
+        if (customJumpWindowOpen)
+        {
+            customJumpWindowRect = GUI.Window(
+                CustomJumpWindowId,
+                customJumpWindowRect,
+                DrawCustomJumpWindow,
+                "Custom Jump");
+            customJumpWindowRect = ClampToScreen(customJumpWindowRect);
         }
     }
 
@@ -232,6 +284,175 @@ public class PlayerController : MonoBehaviour
 
         playerVisual.OnJump(direction);
         playerVisual.SetState(currentState);
+    }
+
+    private bool UpdateDebugCustomJump(bool grounded)
+    {
+        if (!IsDebugModeEnabled())
+        {
+            if (customJumpWindowOpen)
+            {
+                CancelDebugCustomJump();
+            }
+
+            return false;
+        }
+
+        if (!customJumpWindowOpen)
+        {
+            return false;
+        }
+
+        if (!grounded || currentState != PlayerJumpState.Idle)
+        {
+            CancelDebugCustomJump();
+            return false;
+        }
+
+        RefreshDebugCustomJumpPreview();
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            ExecuteDebugCustomJump();
+        }
+
+        return true;
+    }
+
+    private void OpenDebugCustomJumpWindow(Rect buttonRect)
+    {
+        if (!CanStartDebugCustomJump())
+        {
+            return;
+        }
+
+        customJumpWindowOpen = true;
+        customJumpWindowRect = ClampToScreen(new Rect(
+            buttonRect.x,
+            buttonRect.y + buttonRect.height + 4f,
+            CustomJumpWindowWidth,
+            CustomJumpWindowHeight));
+
+        RefreshDebugCustomJumpPreview();
+    }
+
+    private void DrawCustomJumpWindow(int windowId)
+    {
+        GUILayout.Label("Angle");
+        customJumpAngleText = GUILayout.TextField(customJumpAngleText);
+        GUILayout.Label("Gauge %");
+        customJumpGaugePercentText = GUILayout.TextField(customJumpGaugePercentText);
+
+        RefreshDebugCustomJumpPreview();
+
+        if (GUILayout.Button("Cancel"))
+        {
+            CancelDebugCustomJump();
+        }
+
+        GUI.DragWindow(new Rect(0f, 0f, CustomJumpWindowWidth, 20f));
+    }
+
+    private void RefreshDebugCustomJumpPreview()
+    {
+        if (TryParseFloat(customJumpAngleText, out float parsedAngle))
+        {
+            customJumpAngle = parsedAngle;
+        }
+
+        if (TryParseFloat(customJumpGaugePercentText, out float parsedGaugePercent))
+        {
+            customJumpGaugeNormalized = Mathf.Clamp01(parsedGaugePercent / 100f);
+        }
+
+        angleAim.ShowAngle(customJumpAngle);
+        powerGauge.ShowLockedValue(customJumpGaugeNormalized);
+    }
+
+    private void ExecuteDebugCustomJump()
+    {
+        lockedJumpAngle = customJumpAngle;
+        lockedJumpDirection = GetDirectionFromAngle(customJumpAngle);
+        lockedPower = powerGauge.ShowLockedValue(customJumpGaugeNormalized);
+
+        customJumpWindowOpen = false;
+        ExecuteJump();
+    }
+
+    private void CancelDebugCustomJump()
+    {
+        customJumpWindowOpen = false;
+        angleAim.Hide();
+        powerGauge.Hide();
+
+        if (currentState == PlayerJumpState.Idle)
+        {
+            playerVisual.SetState(currentState);
+        }
+    }
+
+    private bool CanStartDebugCustomJump()
+    {
+        return IsDebugModeEnabled()
+            && !customJumpWindowOpen
+            && currentState == PlayerJumpState.Idle
+            && groundChecker != null
+            && groundChecker.CheckGroundedNow();
+    }
+
+    private bool IsDebugModeEnabled()
+    {
+        return jumpTuning != null && jumpTuning.DebugModeEnabled;
+    }
+
+    private bool TryGetCustomJumpButtonRect(out Rect buttonRect)
+    {
+        buttonRect = default;
+
+        Camera camera = Camera.main;
+        if (camera == null)
+        {
+            camera = UnityEngine.Object.FindFirstObjectByType<Camera>();
+        }
+
+        if (camera == null)
+        {
+            return false;
+        }
+
+        Vector3 worldPosition = transform.position + (Vector3)CustomJumpButtonWorldOffset;
+        Vector3 screenPosition = camera.WorldToScreenPoint(worldPosition);
+        if (screenPosition.z < 0f)
+        {
+            return false;
+        }
+
+        buttonRect = ClampToScreen(new Rect(
+            screenPosition.x - CustomJumpButtonWidth * 0.5f,
+            Screen.height - screenPosition.y - CustomJumpButtonHeight * 0.5f,
+            CustomJumpButtonWidth,
+            CustomJumpButtonHeight));
+        return true;
+    }
+
+    private static Rect ClampToScreen(Rect rect)
+    {
+        float maxX = Mathf.Max(0f, Screen.width - rect.width);
+        float maxY = Mathf.Max(0f, Screen.height - rect.height);
+        rect.x = Mathf.Clamp(rect.x, 0f, maxX);
+        rect.y = Mathf.Clamp(rect.y, 0f, maxY);
+        return rect;
+    }
+
+    private static Vector2 GetDirectionFromAngle(float angle)
+    {
+        float radians = angle * Mathf.Deg2Rad;
+        return new Vector2(Mathf.Sin(radians), Mathf.Cos(radians)).normalized;
+    }
+
+    private static bool TryParseFloat(string text, out float value)
+    {
+        return float.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value)
+            || float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
     }
 
     private void CancelPreparationAndWaitForLanding()

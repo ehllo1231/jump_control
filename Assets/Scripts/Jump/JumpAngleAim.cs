@@ -88,6 +88,14 @@ public class JumpAngleAim : MonoBehaviour
         UpdateVisuals();
     }
 
+    public void ShowAngle(float angle)
+    {
+        EnsureVisuals();
+        currentAngle = angle;
+        SetVisible(true);
+        UpdateVisuals();
+    }
+
     public void Hide()
     {
         SetVisible(false);

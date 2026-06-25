@@ -86,6 +86,8 @@ public class JumpTuningWindow : EditorWindow
         DrawDirectionSettings(tuningProperty);
         EditorGUILayout.Space(10f);
         DrawPowerGaugeSettings(tuningProperty);
+        EditorGUILayout.Space(10f);
+        DrawDebugModeSettings(tuningProperty);
 
         if (EditorGUI.EndChangeCheck())
         {
@@ -173,6 +175,12 @@ public class JumpTuningWindow : EditorWindow
         EditorGUILayout.HelpBox(
             "Gauge Power Response의 X축은 게이지 값 0~1, Y축은 Minimum과 Maximum 사이의 보간 비율 0~1입니다.",
             MessageType.None);
+    }
+
+    private static void DrawDebugModeSettings(SerializedProperty tuningProperty)
+    {
+        EditorGUILayout.LabelField("Debug Mode", EditorStyles.boldLabel);
+        DrawProperty(tuningProperty, "debugModeEnabled", "Enable Debug Mode");
     }
 
     private static void DrawProperty(SerializedProperty parent, string propertyName, string label)
