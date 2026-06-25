@@ -15,7 +15,15 @@ public enum PlatformShape2D
     [InspectorName("Triangle Down")]
     TriangleDown = 3,
     [InspectorName("Triangle Left")]
-    TriangleLeft = 4
+    TriangleLeft = 4,
+    [InspectorName("Right Triangle Bottom Left")]
+    RightTriangleBottomLeft = 5,
+    [InspectorName("Right Triangle Bottom Right")]
+    RightTriangleBottomRight = 6,
+    [InspectorName("Right Triangle Top Right")]
+    RightTriangleTopRight = 7,
+    [InspectorName("Right Triangle Top Left")]
+    RightTriangleTopLeft = 8
 }
 
 /// <summary>
@@ -31,10 +39,17 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
     private const float MinimumSize = 0.1f;
     private const float SizeTolerance = 0.0001f;
     private const float MinimumTriangleArea = 0.0005f;
+    private const int RightTriangleSpritePixels = 2048;
+    private const int RightTriangleSpriteSupersampling = 2;
     private const string TriangleVisualName = "Triangle Visual";
+    private const string RightTriangleSpriteNamePrefix = "Platform2D Right Triangle";
     private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
     private static readonly int RendererColorPropertyId = Shader.PropertyToID("_RendererColor");
     private static readonly int MainTexPropertyId = Shader.PropertyToID("_MainTex");
+    private static Sprite rightTriangleBottomLeftSprite;
+    private static Sprite rightTriangleBottomRightSprite;
+    private static Sprite rightTriangleTopRightSprite;
+    private static Sprite rightTriangleTopLeftSprite;
 
     [Header("Platform Size")]
     [SerializeField] private PlatformShape2D shape = PlatformShape2D.Rectangle;
@@ -52,6 +67,7 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
     [SerializeField] private PolygonCollider2D polygonCollider;
     [SerializeField] private MeshFilter triangleMeshFilter;
     [SerializeField] private MeshRenderer triangleMeshRenderer;
+    [SerializeField] private Sprite rectangleSprite;
 
 #if UNITY_EDITOR
     [System.NonSerialized] private bool applySizeScheduled;
@@ -66,6 +82,7 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
     public Vector2 Size => new Vector2(width, height);
     public float RotationDegrees => NormalizeSignedDegrees(transform.localEulerAngles.z);
     public bool UsesTriangleShape => IsTriangleShape;
+    public bool UsesRightTriangleShape => IsRightTriangleShape;
     public Bounds WorldBounds
     {
         get
@@ -158,6 +175,11 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
             return false;
         }
 
+        if (IsRightTriangleShape)
+        {
+            return SetRightTriangleVertex(index, localPosition);
+        }
+
         Vector2[] points = GetTrianglePoints();
         points[index] = localPosition;
         if (!HasUsableTriangle(points))
@@ -179,6 +201,11 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
         }
 
         Vector2[] points = { vertexA, vertexB, vertexC };
+        if (IsRightTriangleShape)
+        {
+            points = GetRightTrianglePointsForBounds(CalculateLocalBounds(points), Shape);
+        }
+
         if (!HasUsableTriangle(points))
         {
             return false;
@@ -218,6 +245,10 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
             case PlatformShape2D.TriangleRight:
             case PlatformShape2D.TriangleDown:
             case PlatformShape2D.TriangleLeft:
+            case PlatformShape2D.RightTriangleBottomLeft:
+            case PlatformShape2D.RightTriangleBottomRight:
+            case PlatformShape2D.RightTriangleTopRight:
+            case PlatformShape2D.RightTriangleTopLeft:
                 return TryGetTriangleTopLandingSegment(playerHalfWidth, out minStandX, out maxStandX, out centerLandingY);
             default:
                 return false;
@@ -255,6 +286,12 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
 
         if (IsTriangleShape)
         {
+            if (IsRightTriangleShape)
+            {
+                SyncRightTriangleToVisibleSize();
+                return;
+            }
+
             ApplyTriangleShape();
             return;
         }
@@ -329,6 +366,8 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
             spriteRenderer = GetComponent<SpriteRenderer>();
         }
 
+        StoreRectangleSpriteIfNeeded();
+
         if (boxCollider == null)
         {
             boxCollider = GetComponent<BoxCollider2D>();
@@ -398,6 +437,7 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
     }
 
     private bool IsTriangleShape => Shape != PlatformShape2D.Rectangle;
+    private bool IsRightTriangleShape => IsRightTriangleShapeValue(Shape);
 
     private void ApplyRectangleShape()
     {
@@ -405,6 +445,11 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
 
         if (spriteRenderer != null)
         {
+            if (rectangleSprite != null && spriteRenderer.sprite != rectangleSprite)
+            {
+                spriteRenderer.sprite = rectangleSprite;
+            }
+
             spriteRenderer.enabled = true;
             spriteRenderer.drawMode = SpriteDrawMode.Sliced;
             spriteRenderer.size = platformSize;
@@ -430,9 +475,15 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
 
     private void ApplyTriangleShape()
     {
+        Vector2[] points = GetTrianglePoints();
+        if (IsRightTriangleShape)
+        {
+            ApplyRightTriangleShape(points);
+            return;
+        }
+
         EnsureTriangleReferences();
 
-        Vector2[] points = GetTrianglePoints();
         if (spriteRenderer != null)
         {
             spriteRenderer.enabled = false;
@@ -466,16 +517,98 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
         }
     }
 
-    private void EnsureTriangleReferences()
+    private void ApplyRightTriangleShape(Vector2[] points)
     {
-        if (polygonCollider == null)
+        RemoveTriangleVisualIfPresent();
+        EnsurePolygonCollider();
+
+        Vector2 platformSize = Size;
+        if (spriteRenderer != null)
         {
-            polygonCollider = GetComponent<PolygonCollider2D>();
-            if (polygonCollider == null)
+            StoreRectangleSpriteIfNeeded();
+            spriteRenderer.enabled = true;
+            spriteRenderer.sprite = GetRightTriangleSprite(Shape);
+            spriteRenderer.drawMode = SpriteDrawMode.Sliced;
+            spriteRenderer.size = platformSize;
+        }
+
+        if (boxCollider != null)
+        {
+            boxCollider.enabled = false;
+        }
+
+        if (polygonCollider != null)
+        {
+            polygonCollider.enabled = true;
+            polygonCollider.offset = Vector2.zero;
+            polygonCollider.pathCount = 1;
+            polygonCollider.SetPath(0, points);
+        }
+    }
+
+    private void SyncRightTriangleToVisibleSize()
+    {
+        Vector2 visibleSize = Size;
+        if (spriteRenderer != null)
+        {
+            StoreRectangleSpriteIfNeeded();
+            if (spriteRenderer.sprite == null || !IsGeneratedRightTriangleSprite(spriteRenderer.sprite))
             {
-                polygonCollider = gameObject.AddComponent<PolygonCollider2D>();
+                spriteRenderer.sprite = GetRightTriangleSprite(Shape);
+            }
+
+            if (spriteRenderer.drawMode != SpriteDrawMode.Sliced)
+            {
+                spriteRenderer.drawMode = SpriteDrawMode.Sliced;
+            }
+
+            visibleSize = ClampSize(spriteRenderer.size);
+            if (!Approximately(spriteRenderer.size, visibleSize))
+            {
+                spriteRenderer.size = visibleSize;
             }
         }
+
+#if UNITY_EDITOR
+        bool changed = false;
+#endif
+        if (!Approximately(Size, visibleSize))
+        {
+            width = visibleSize.x;
+            height = visibleSize.y;
+            ResizeTriangleToSize(visibleSize);
+#if UNITY_EDITOR
+            changed = true;
+#endif
+        }
+
+        ApplyRightTriangleShape(GetTrianglePoints());
+
+#if UNITY_EDITOR
+        if (changed)
+        {
+            EditorUtility.SetDirty(this);
+            if (spriteRenderer != null)
+            {
+                EditorUtility.SetDirty(spriteRenderer);
+            }
+
+            if (polygonCollider != null)
+            {
+                EditorUtility.SetDirty(polygonCollider);
+            }
+
+            if (!Application.isPlaying && gameObject.scene.IsValid())
+            {
+                EditorSceneManager.MarkSceneDirty(gameObject.scene);
+            }
+        }
+#endif
+    }
+
+    private void EnsureTriangleReferences()
+    {
+        EnsurePolygonCollider();
 
         Transform triangleVisual = GetOrCreateTriangleVisual();
 
@@ -495,6 +628,29 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
             {
                 triangleMeshRenderer = triangleVisual.gameObject.AddComponent<MeshRenderer>();
             }
+        }
+    }
+
+    private void EnsurePolygonCollider()
+    {
+        if (polygonCollider == null)
+        {
+            polygonCollider = GetComponent<PolygonCollider2D>();
+            if (polygonCollider == null)
+            {
+                polygonCollider = gameObject.AddComponent<PolygonCollider2D>();
+            }
+        }
+    }
+
+    private void StoreRectangleSpriteIfNeeded()
+    {
+        if (spriteRenderer != null
+            && spriteRenderer.sprite != null
+            && rectangleSprite == null
+            && !IsGeneratedRightTriangleSprite(spriteRenderer.sprite))
+        {
+            rectangleSprite = spriteRenderer.sprite;
         }
     }
 
@@ -545,6 +701,40 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
         MarkTriangleVisualDirty(visualObject);
 #endif
         return triangleVisual;
+    }
+
+    private void RemoveTriangleVisualIfPresent()
+    {
+        Transform triangleVisual = FindTriangleVisual();
+        if (triangleVisual == null)
+        {
+            return;
+        }
+
+        if (triangleMeshFilter != null && triangleMeshFilter.transform == triangleVisual)
+        {
+            triangleMeshFilter = null;
+        }
+
+        if (triangleMeshRenderer != null && triangleMeshRenderer.transform == triangleVisual)
+        {
+            triangleMeshRenderer = null;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(triangleVisual.gameObject);
+        }
+        else
+        {
+            DestroyImmediate(triangleVisual.gameObject);
+#if UNITY_EDITOR
+            if (gameObject.scene.IsValid())
+            {
+                EditorSceneManager.MarkSceneDirty(gameObject.scene);
+            }
+#endif
+        }
     }
 
     private Transform FindTriangleVisual()
@@ -708,6 +898,11 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
             points = GetTrianglePresetPoints(Size, Shape);
             SetStoredTrianglePoints(points);
         }
+        else if (IsRightTriangleShape)
+        {
+            points = GetRightTrianglePointsForBounds(CalculateLocalBounds(points), Shape);
+            SetStoredTrianglePoints(points);
+        }
 
         UpdateSizeFromTrianglePoints(points);
     }
@@ -718,6 +913,16 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
         if (!HasUsableTriangle(points))
         {
             SetStoredTrianglePoints(GetTrianglePresetPoints(targetSize, Shape));
+            return;
+        }
+
+        if (IsRightTriangleShape)
+        {
+            Bounds currentBounds = CalculateLocalBounds(points);
+            Bounds targetBounds = new Bounds(
+                currentBounds.center,
+                new Vector3(targetSize.x, targetSize.y, 0f));
+            SetStoredTrianglePoints(GetRightTrianglePointsForBounds(targetBounds, Shape));
             return;
         }
 
@@ -739,6 +944,45 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
         }
 
         SetStoredTrianglePoints(points);
+    }
+
+    private bool SetRightTriangleVertex(int index, Vector2 localPosition)
+    {
+        Vector2[] points = GetTrianglePoints();
+        if (!TryGetRightTriangleAxes(Shape, out Vector2 horizontalAxis, out Vector2 verticalAxis))
+        {
+            return false;
+        }
+
+        Vector2 rightAngleCorner = points[0];
+        float legWidth = Mathf.Max(MinimumSize, Vector2.Dot(points[1] - rightAngleCorner, horizontalAxis));
+        float legHeight = Mathf.Max(MinimumSize, Vector2.Dot(points[2] - rightAngleCorner, verticalAxis));
+
+        switch (index)
+        {
+            case 0:
+                rightAngleCorner = localPosition;
+                break;
+            case 1:
+                legWidth = Mathf.Max(MinimumSize, Vector2.Dot(localPosition - rightAngleCorner, horizontalAxis));
+                break;
+            case 2:
+                legHeight = Mathf.Max(MinimumSize, Vector2.Dot(localPosition - rightAngleCorner, verticalAxis));
+                break;
+            default:
+                return false;
+        }
+
+        Vector2[] nextPoints = GetRightTrianglePoints(rightAngleCorner, legWidth, legHeight, Shape);
+        if (!HasUsableTriangle(nextPoints))
+        {
+            return false;
+        }
+
+        SetStoredTrianglePoints(nextPoints);
+        UpdateSizeFromTrianglePoints(nextPoints);
+        ApplySize();
+        return true;
     }
 
     private void UpdateSizeFromTrianglePoints(Vector2[] points)
@@ -897,6 +1141,13 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
 
         switch (platformShape)
         {
+            case PlatformShape2D.RightTriangleBottomLeft:
+            case PlatformShape2D.RightTriangleBottomRight:
+            case PlatformShape2D.RightTriangleTopRight:
+            case PlatformShape2D.RightTriangleTopLeft:
+                return GetRightTrianglePointsForBounds(
+                    new Bounds(Vector3.zero, new Vector3(size.x, size.y, 0f)),
+                    platformShape);
             case PlatformShape2D.TriangleRight:
                 return new[]
                 {
@@ -929,6 +1180,212 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
         }
     }
 
+    private static Vector2[] GetRightTrianglePoints(Vector2 rightAngleCorner, float legWidth, float legHeight, PlatformShape2D platformShape)
+    {
+        if (!TryGetRightTriangleAxes(platformShape, out Vector2 horizontalAxis, out Vector2 verticalAxis))
+        {
+            horizontalAxis = Vector2.right;
+            verticalAxis = Vector2.up;
+        }
+
+        return new[]
+        {
+            rightAngleCorner,
+            rightAngleCorner + horizontalAxis * Mathf.Max(MinimumSize, legWidth),
+            rightAngleCorner + verticalAxis * Mathf.Max(MinimumSize, legHeight)
+        };
+    }
+
+    private static Vector2[] GetRightTrianglePointsForBounds(Bounds bounds, PlatformShape2D platformShape)
+    {
+        Vector2 min = bounds.min;
+        Vector2 max = bounds.max;
+
+        switch (platformShape)
+        {
+            case PlatformShape2D.RightTriangleBottomRight:
+                return new[]
+                {
+                    new Vector2(max.x, min.y),
+                    new Vector2(min.x, min.y),
+                    new Vector2(max.x, max.y)
+                };
+            case PlatformShape2D.RightTriangleTopRight:
+                return new[]
+                {
+                    new Vector2(max.x, max.y),
+                    new Vector2(min.x, max.y),
+                    new Vector2(max.x, min.y)
+                };
+            case PlatformShape2D.RightTriangleTopLeft:
+                return new[]
+                {
+                    new Vector2(min.x, max.y),
+                    new Vector2(max.x, max.y),
+                    new Vector2(min.x, min.y)
+                };
+            case PlatformShape2D.RightTriangleBottomLeft:
+            default:
+                return new[]
+                {
+                    new Vector2(min.x, min.y),
+                    new Vector2(max.x, min.y),
+                    new Vector2(min.x, max.y)
+                };
+        }
+    }
+
+    private static bool TryGetRightTriangleAxes(
+        PlatformShape2D platformShape,
+        out Vector2 horizontalAxis,
+        out Vector2 verticalAxis)
+    {
+        switch (platformShape)
+        {
+            case PlatformShape2D.RightTriangleBottomLeft:
+                horizontalAxis = Vector2.right;
+                verticalAxis = Vector2.up;
+                return true;
+            case PlatformShape2D.RightTriangleBottomRight:
+                horizontalAxis = Vector2.left;
+                verticalAxis = Vector2.up;
+                return true;
+            case PlatformShape2D.RightTriangleTopRight:
+                horizontalAxis = Vector2.left;
+                verticalAxis = Vector2.down;
+                return true;
+            case PlatformShape2D.RightTriangleTopLeft:
+                horizontalAxis = Vector2.right;
+                verticalAxis = Vector2.down;
+                return true;
+            default:
+                horizontalAxis = Vector2.right;
+                verticalAxis = Vector2.up;
+                return false;
+        }
+    }
+
+    private static Sprite GetRightTriangleSprite(PlatformShape2D platformShape)
+    {
+        switch (platformShape)
+        {
+            case PlatformShape2D.RightTriangleBottomRight:
+                if (rightTriangleBottomRightSprite == null)
+                {
+                    rightTriangleBottomRightSprite = CreateRightTriangleSprite(platformShape);
+                }
+
+                return rightTriangleBottomRightSprite;
+            case PlatformShape2D.RightTriangleTopRight:
+                if (rightTriangleTopRightSprite == null)
+                {
+                    rightTriangleTopRightSprite = CreateRightTriangleSprite(platformShape);
+                }
+
+                return rightTriangleTopRightSprite;
+            case PlatformShape2D.RightTriangleTopLeft:
+                if (rightTriangleTopLeftSprite == null)
+                {
+                    rightTriangleTopLeftSprite = CreateRightTriangleSprite(platformShape);
+                }
+
+                return rightTriangleTopLeftSprite;
+            case PlatformShape2D.RightTriangleBottomLeft:
+            default:
+                if (rightTriangleBottomLeftSprite == null)
+                {
+                    rightTriangleBottomLeftSprite = CreateRightTriangleSprite(PlatformShape2D.RightTriangleBottomLeft);
+                }
+
+                return rightTriangleBottomLeftSprite;
+        }
+    }
+
+    private static Sprite CreateRightTriangleSprite(PlatformShape2D platformShape)
+    {
+        Texture2D texture = new Texture2D(
+            RightTriangleSpritePixels,
+            RightTriangleSpritePixels,
+            TextureFormat.RGBA32,
+            true)
+        {
+            name = $"{RightTriangleSpriteNamePrefix} Texture",
+            filterMode = FilterMode.Trilinear,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        texture.anisoLevel = 1;
+
+        Color32[] pixels = new Color32[RightTriangleSpritePixels * RightTriangleSpritePixels];
+        Color32 transparent = new Color32(255, 255, 255, 0);
+        for (int y = 0; y < RightTriangleSpritePixels; y++)
+        {
+            for (int x = 0; x < RightTriangleSpritePixels; x++)
+            {
+                byte alpha = GetRightTrianglePixelAlpha(x, y, platformShape);
+                pixels[y * RightTriangleSpritePixels + x] = alpha > 0
+                    ? new Color32(255, 255, 255, alpha)
+                    : transparent;
+            }
+        }
+
+        texture.SetPixels32(pixels);
+        texture.Apply(true, true);
+
+        Sprite sprite = Sprite.Create(
+            texture,
+            new Rect(0f, 0f, RightTriangleSpritePixels, RightTriangleSpritePixels),
+            new Vector2(0.5f, 0.5f),
+            RightTriangleSpritePixels,
+            0,
+            SpriteMeshType.FullRect);
+        sprite.name = $"{RightTriangleSpriteNamePrefix} {platformShape}";
+        sprite.hideFlags = HideFlags.HideAndDontSave;
+        return sprite;
+    }
+
+    private static byte GetRightTrianglePixelAlpha(int x, int y, PlatformShape2D platformShape)
+    {
+        int filledSamples = 0;
+        int sampleCount = RightTriangleSpriteSupersampling * RightTriangleSpriteSupersampling;
+        float sampleStep = 1f / RightTriangleSpriteSupersampling;
+        for (int sampleY = 0; sampleY < RightTriangleSpriteSupersampling; sampleY++)
+        {
+            for (int sampleX = 0; sampleX < RightTriangleSpriteSupersampling; sampleX++)
+            {
+                float normalizedX = (x + (sampleX + 0.5f) * sampleStep) / RightTriangleSpritePixels;
+                float normalizedY = (y + (sampleY + 0.5f) * sampleStep) / RightTriangleSpritePixels;
+                if (IsRightTriangleSampleFilled(normalizedX, normalizedY, platformShape))
+                {
+                    filledSamples++;
+                }
+            }
+        }
+
+        return (byte)Mathf.RoundToInt(255f * filledSamples / sampleCount);
+    }
+
+    private static bool IsRightTriangleSampleFilled(float normalizedX, float normalizedY, PlatformShape2D platformShape)
+    {
+        switch (platformShape)
+        {
+            case PlatformShape2D.RightTriangleBottomRight:
+                return normalizedY <= normalizedX;
+            case PlatformShape2D.RightTriangleTopRight:
+                return normalizedX + normalizedY >= 1f;
+            case PlatformShape2D.RightTriangleTopLeft:
+                return normalizedX <= normalizedY;
+            case PlatformShape2D.RightTriangleBottomLeft:
+            default:
+                return normalizedX + normalizedY <= 1f;
+        }
+    }
+
+    private static bool IsGeneratedRightTriangleSprite(Sprite sprite)
+    {
+        return sprite != null && sprite.name.StartsWith(RightTriangleSpriteNamePrefix);
+    }
+
     private static Vector2[] GetTriangleUvs(Vector2[] points)
     {
         Bounds bounds = CalculateLocalBounds(points);
@@ -957,9 +1414,27 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
             case PlatformShape2D.TriangleRight:
             case PlatformShape2D.TriangleDown:
             case PlatformShape2D.TriangleLeft:
+            case PlatformShape2D.RightTriangleBottomLeft:
+            case PlatformShape2D.RightTriangleBottomRight:
+            case PlatformShape2D.RightTriangleTopRight:
+            case PlatformShape2D.RightTriangleTopLeft:
                 return platformShape;
             default:
                 return PlatformShape2D.Rectangle;
+        }
+    }
+
+    private static bool IsRightTriangleShapeValue(PlatformShape2D platformShape)
+    {
+        switch (platformShape)
+        {
+            case PlatformShape2D.RightTriangleBottomLeft:
+            case PlatformShape2D.RightTriangleBottomRight:
+            case PlatformShape2D.RightTriangleTopRight:
+            case PlatformShape2D.RightTriangleTopLeft:
+                return true;
+            default:
+                return false;
         }
     }
 }

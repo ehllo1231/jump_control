@@ -25,5 +25,6 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 | UC-003-06 | 점프 도달 후보 표시 | Implemented | [문서](./UC-003-06-show-jump-reachability.md) | 2026-06-22 |
 | UC-003-07 | 기본 Platform 색상 일관성 유지 | Implemented | [문서](./UC-003-07-keep-platform-color-consistent.md) | 2026-06-22 |
 | UC-003-08 | 코드 수정 중 사용자 맵 구성 보존 | Implemented | [문서](./UC-003-08-preserve-user-map-edits.md) | 2026-06-23 |
-| UC-003-09 | 삼각형 Platform 생성 | Implemented | [문서](./UC-003-09-create-triangle-platform.md) | 2026-06-23 |
+| UC-003-09 | 삼각형 Platform 생성 | Implemented | [문서](./UC-003-09-create-triangle-platform.md) | 2026-06-25 |
 | UC-003-10 | Platform 회전 조정 | Implemented | [문서](./UC-003-10-rotate-platform.md) | 2026-06-22 |
+| UC-003-11 | 직각 삼각형 Platform 생성 및 편집 | Implemented | [문서](./UC-003-11-create-right-triangle-platform.md) | 2026-06-25 |

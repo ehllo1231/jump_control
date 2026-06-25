@@ -203,9 +203,28 @@ public sealed class MapBuilderWindow : EditorWindow
 
     private string GetCreateButtonLabel()
     {
-        return defaultShape == PlatformShape2D.Rectangle
-            ? "Create Platform"
+        if (defaultShape == PlatformShape2D.Rectangle)
+        {
+            return "Create Platform";
+        }
+
+        return IsRightTriangleShape(defaultShape)
+            ? "Create Right Triangle Brick"
             : "Create Triangle Brick";
+    }
+
+    private static bool IsRightTriangleShape(PlatformShape2D shape)
+    {
+        switch (shape)
+        {
+            case PlatformShape2D.RightTriangleBottomLeft:
+            case PlatformShape2D.RightTriangleBottomRight:
+            case PlatformShape2D.RightTriangleTopRight:
+            case PlatformShape2D.RightTriangleTopLeft:
+                return true;
+            default:
+                return false;
+        }
     }
 
     private void DrawSelectedRotationControls(Platform2D selectedPlatform)
