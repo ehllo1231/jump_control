@@ -10,6 +10,12 @@ public class JumpInputReader : MonoBehaviour
     [SerializeField] private bool enableKeyboardInput = true;
     [SerializeField] private KeyCode jumpKey = KeyCode.Space;
 
+    [Header("Touch Input")]
+    [SerializeField] private bool enableTouchInput = true;
+#if UNITY_EDITOR
+    [SerializeField] private bool enableEditorMouseTouchSimulation;
+#endif
+
     private bool previousHeld;
     private bool externalJumpHeld;
 
@@ -24,7 +30,8 @@ public class JumpInputReader : MonoBehaviour
     public void Tick()
     {
         bool keyboardHeld = enableKeyboardInput && Input.GetKey(jumpKey);
-        bool currentHeld = keyboardHeld || externalJumpHeld;
+        bool touchHeld = enableTouchInput && IsTouchHeld();
+        bool currentHeld = keyboardHeld || touchHeld || externalJumpHeld;
 
         WasPressed = currentHeld && !previousHeld;
         WasReleased = !currentHeld && previousHeld;
@@ -53,5 +60,26 @@ public class JumpInputReader : MonoBehaviour
         WasPressed = false;
         IsHeld = false;
         WasReleased = false;
+    }
+
+    private bool IsTouchHeld()
+    {
+#if UNITY_EDITOR
+        if (enableEditorMouseTouchSimulation && Input.GetMouseButton(0))
+        {
+            return true;
+        }
+#endif
+
+        for (int i = 0; i < Input.touchCount; i++)
+        {
+            TouchPhase phase = Input.GetTouch(i).phase;
+            if (phase != TouchPhase.Ended && phase != TouchPhase.Canceled)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

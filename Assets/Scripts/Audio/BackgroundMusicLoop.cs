@@ -14,6 +14,10 @@ public sealed class BackgroundMusicLoop : MonoBehaviour
 
     private AudioSource audioSource;
     private Coroutine loopRoutine;
+    private bool playbackPaused;
+    private bool resumeAfterPause;
+    private int pausedTimeSamples;
+    private float pausedVolume;
 
     public void Configure(AudioClip clip, float targetVolume, float fadeSeconds, bool shouldPlayOnStart = true)
     {
@@ -65,11 +69,59 @@ public sealed class BackgroundMusicLoop : MonoBehaviour
             loopRoutine = null;
         }
 
+        playbackPaused = false;
+        resumeAfterPause = false;
+        pausedTimeSamples = 0;
+        pausedVolume = volume;
+
         if (audioSource != null)
         {
             audioSource.Stop();
             audioSource.volume = volume;
         }
+    }
+
+    public void Pause()
+    {
+        CacheAudioSource();
+        if (audioSource == null || musicClip == null || playbackPaused)
+        {
+            return;
+        }
+
+        resumeAfterPause = audioSource.isPlaying;
+        if (!resumeAfterPause)
+        {
+            return;
+        }
+
+        pausedTimeSamples = Mathf.Clamp(audioSource.timeSamples, 0, Mathf.Max(0, musicClip.samples - 1));
+        pausedVolume = audioSource.volume;
+        playbackPaused = true;
+        audioSource.Pause();
+    }
+
+    public void Resume()
+    {
+        CacheAudioSource();
+        if (!playbackPaused)
+        {
+            return;
+        }
+
+        playbackPaused = false;
+        if (!resumeAfterPause || audioSource == null || musicClip == null)
+        {
+            resumeAfterPause = false;
+            return;
+        }
+
+        ConfigureAudioSource(resetVolume: false);
+        audioSource.clip = musicClip;
+        audioSource.timeSamples = Mathf.Clamp(pausedTimeSamples, 0, Mathf.Max(0, musicClip.samples - 1));
+        audioSource.volume = pausedVolume;
+        audioSource.UnPause();
+        resumeAfterPause = false;
     }
 
     private IEnumerator PlayLoop()
@@ -86,8 +138,14 @@ public sealed class BackgroundMusicLoop : MonoBehaviour
             float fadeStartTime = Mathf.Max(0f, clipLength - fadeOutDuration);
             float fadeLength = Mathf.Max(0.05f, clipLength - fadeStartTime);
 
-            while (audioSource.isPlaying)
+            while (audioSource.isPlaying || playbackPaused)
             {
+                if (playbackPaused)
+                {
+                    yield return null;
+                    continue;
+                }
+
                 if (audioSource.time >= fadeStartTime)
                 {
                     float fadeProgress = Mathf.Clamp01((audioSource.time - fadeStartTime) / fadeLength);
@@ -119,7 +177,7 @@ public sealed class BackgroundMusicLoop : MonoBehaviour
         }
     }
 
-    private void ConfigureAudioSource()
+    private void ConfigureAudioSource(bool resetVolume = true)
     {
         if (audioSource == null)
         {
@@ -129,12 +187,39 @@ public sealed class BackgroundMusicLoop : MonoBehaviour
         audioSource.playOnAwake = false;
         audioSource.loop = false;
         audioSource.spatialBlend = 0f;
-        audioSource.volume = volume;
+        if (resetVolume)
+        {
+            audioSource.volume = volume;
+        }
     }
 
     private void OnDisable()
     {
         Stop();
+    }
+
+    private void OnApplicationPause(bool pauseStatus)
+    {
+        if (pauseStatus)
+        {
+            Pause();
+        }
+        else
+        {
+            Resume();
+        }
+    }
+
+    private void OnApplicationFocus(bool hasFocus)
+    {
+        if (hasFocus)
+        {
+            Resume();
+        }
+        else
+        {
+            Pause();
+        }
     }
 
     private void OnValidate()
