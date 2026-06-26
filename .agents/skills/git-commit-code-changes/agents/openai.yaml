@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git Commit Code Changes"
+  short_description: "Commit each implemented code change"
+  default_prompt: "Use $git-commit-code-changes when implementing code changes so the finished work is committed with a concise summary."
