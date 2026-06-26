@@ -38,6 +38,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private GroundChecker groundChecker;
     [SerializeField] private PlayerVisual playerVisual;
     [SerializeField] private BoxCollider2D bodyCollider;
+    [SerializeField] private Rigidbody2D body;
 
     [Header("Jump Tuning")]
     [SerializeField] private JumpTuningConfig jumpTuning = new JumpTuningConfig();
@@ -53,6 +54,8 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private Vector2 lockedJumpDirection = Vector2.up;
     [SerializeField] private float lastJumpAngle;
     [SerializeField] private Vector2 lastJumpVector;
+    [SerializeField] private bool hasPreviousJumpReturnPosition;
+    [SerializeField] private Vector2 previousJumpReturnPosition;
 
     private float jumpStartedAt;
     private bool hasLeftGround;
@@ -98,6 +101,11 @@ public class PlayerController : MonoBehaviour
         inputReader.Tick();
 
         bool grounded = groundChecker.CheckGroundedNow();
+        if (UpdateDebugReturnToPreviousJumpPosition())
+        {
+            return;
+        }
+
         if (UpdateDebugCustomJump(grounded))
         {
             return;
@@ -273,6 +281,7 @@ public class PlayerController : MonoBehaviour
             : Vector2.up;
 
         lastJumpAngle = lockedJumpAngle;
+        SavePreviousJumpReturnPosition();
         lastJumpVector = jumpMotor.Jump(lockedPower, direction);
 
         powerGauge.Hide();
@@ -316,6 +325,58 @@ public class PlayerController : MonoBehaviour
         }
 
         return true;
+    }
+
+    private bool UpdateDebugReturnToPreviousJumpPosition()
+    {
+        if (!IsDebugModeEnabled() || !Input.GetKeyDown(KeyCode.R))
+        {
+            return false;
+        }
+
+        if (!hasPreviousJumpReturnPosition)
+        {
+            return true;
+        }
+
+        ReturnToPreviousJumpPosition();
+        return true;
+    }
+
+    private void SavePreviousJumpReturnPosition()
+    {
+        Vector2 currentPosition = body != null ? body.position : (Vector2)transform.position;
+        previousJumpReturnPosition = currentPosition;
+        hasPreviousJumpReturnPosition = true;
+    }
+
+    private void ReturnToPreviousJumpPosition()
+    {
+        customJumpWindowOpen = false;
+        powerGauge.Hide();
+        angleAim.Hide();
+
+        if (body != null)
+        {
+            body.position = previousJumpReturnPosition;
+            body.linearVelocity = Vector2.zero;
+            body.angularVelocity = 0f;
+        }
+        else
+        {
+            Vector3 position = transform.position;
+            transform.position = new Vector3(previousJumpReturnPosition.x, previousJumpReturnPosition.y, position.z);
+        }
+
+        Physics2D.SyncTransforms();
+        if (groundChecker != null && groundChecker.CheckGroundedNow())
+        {
+            EnterIdle();
+        }
+        else
+        {
+            CancelPreparationAndWaitForLanding();
+        }
     }
 
     private void OpenDebugCustomJumpWindow(Rect buttonRect)
@@ -513,6 +574,11 @@ public class PlayerController : MonoBehaviour
         if (bodyCollider == null)
         {
             bodyCollider = GetComponent<BoxCollider2D>();
+        }
+
+        if (body == null)
+        {
+            body = GetComponent<Rigidbody2D>();
         }
     }
 
