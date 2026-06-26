@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 
@@ -27,6 +28,7 @@ public class PlayerController : MonoBehaviour
     private const float CustomJumpButtonHeight = 30f;
     private const float CustomJumpWindowWidth = 220f;
     private const float CustomJumpWindowHeight = 126f;
+    private const float DebugJumpHistorySamePositionToleranceSqr = 0.000001f;
     private const int CustomJumpWindowId = 240624;
     private static readonly Vector2 CustomJumpButtonWorldOffset = new Vector2(1.1f, 0.55f);
 
@@ -54,11 +56,12 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private Vector2 lockedJumpDirection = Vector2.up;
     [SerializeField] private float lastJumpAngle;
     [SerializeField] private Vector2 lastJumpVector;
-    [SerializeField] private bool hasPreviousJumpReturnPosition;
-    [SerializeField] private Vector2 previousJumpReturnPosition;
 
+    private readonly List<Vector2> debugJumpPositionHistory = new List<Vector2>();
     private float jumpStartedAt;
     private bool hasLeftGround;
+    private int debugJumpHistoryCursor = -1;
+    private bool debugHistoryCurrentPositionCaptured;
     private bool customJumpWindowOpen;
     private Rect customJumpWindowRect;
     private string customJumpAngleText = "0";
@@ -101,7 +104,7 @@ public class PlayerController : MonoBehaviour
         inputReader.Tick();
 
         bool grounded = groundChecker.CheckGroundedNow();
-        if (UpdateDebugReturnToPreviousJumpPosition())
+        if (UpdateDebugJumpHistoryNavigation())
         {
             return;
         }
@@ -281,7 +284,7 @@ public class PlayerController : MonoBehaviour
             : Vector2.up;
 
         lastJumpAngle = lockedJumpAngle;
-        SavePreviousJumpReturnPosition();
+        SaveDebugJumpReturnPosition();
         lastJumpVector = jumpMotor.Jump(lockedPower, direction);
 
         powerGauge.Hide();
@@ -327,30 +330,92 @@ public class PlayerController : MonoBehaviour
         return true;
     }
 
-    private bool UpdateDebugReturnToPreviousJumpPosition()
+    private bool UpdateDebugJumpHistoryNavigation()
     {
-        if (!IsDebugModeEnabled() || !Input.GetKeyDown(KeyCode.R))
+        if (!IsDebugModeEnabled())
         {
             return false;
         }
 
-        if (!hasPreviousJumpReturnPosition)
+        if (Input.GetKeyDown(KeyCode.R))
         {
+            StepDebugJumpHistory(-1);
             return true;
         }
 
-        ReturnToPreviousJumpPosition();
-        return true;
+        if (Input.GetKeyDown(KeyCode.T))
+        {
+            StepDebugJumpHistory(1);
+            return true;
+        }
+
+        return false;
     }
 
-    private void SavePreviousJumpReturnPosition()
+    private void StepDebugJumpHistory(int direction)
     {
-        Vector2 currentPosition = body != null ? body.position : (Vector2)transform.position;
-        previousJumpReturnPosition = currentPosition;
-        hasPreviousJumpReturnPosition = true;
+        if (debugJumpPositionHistory.Count == 0)
+        {
+            return;
+        }
+
+        if (!debugHistoryCurrentPositionCaptured)
+        {
+            debugJumpPositionHistory.Add(GetCurrentPosition());
+            debugJumpHistoryCursor = debugJumpPositionHistory.Count - 1;
+            debugHistoryCurrentPositionCaptured = true;
+        }
+
+        int nextIndex = Mathf.Clamp(
+            debugJumpHistoryCursor + direction,
+            0,
+            debugJumpPositionHistory.Count - 1);
+        if (nextIndex == debugJumpHistoryCursor)
+        {
+            return;
+        }
+
+        debugJumpHistoryCursor = nextIndex;
+        MoveToDebugJumpHistoryPosition(debugJumpPositionHistory[debugJumpHistoryCursor]);
     }
 
-    private void ReturnToPreviousJumpPosition()
+    private void SaveDebugJumpReturnPosition()
+    {
+        Vector2 currentPosition = GetCurrentPosition();
+        if (debugHistoryCurrentPositionCaptured)
+        {
+            if (debugJumpHistoryCursor < debugJumpPositionHistory.Count - 1)
+            {
+                debugJumpPositionHistory.RemoveRange(
+                    debugJumpHistoryCursor + 1,
+                    debugJumpPositionHistory.Count - debugJumpHistoryCursor - 1);
+            }
+
+            if (debugJumpHistoryCursor >= 0
+                && debugJumpHistoryCursor < debugJumpPositionHistory.Count
+                && IsSameDebugJumpHistoryPosition(debugJumpPositionHistory[debugJumpHistoryCursor], currentPosition))
+            {
+                debugHistoryCurrentPositionCaptured = false;
+                return;
+            }
+        }
+
+        debugJumpPositionHistory.Add(currentPosition);
+        debugJumpHistoryCursor = debugJumpPositionHistory.Count - 1;
+        debugHistoryCurrentPositionCaptured = false;
+    }
+
+    private static bool IsSameDebugJumpHistoryPosition(Vector2 a, Vector2 b)
+    {
+        return (a - b).sqrMagnitude <= DebugJumpHistorySamePositionToleranceSqr;
+    }
+
+    private Vector2 GetCurrentPosition()
+    {
+        return body != null ? body.position : (Vector2)transform.position;
+    }
+
+    private void MoveToDebugJumpHistoryPosition(Vector2 position)
     {
         customJumpWindowOpen = false;
         powerGauge.Hide();
@@ -358,14 +423,14 @@ public class PlayerController : MonoBehaviour
 
         if (body != null)
         {
-            body.position = previousJumpReturnPosition;
+            body.position = position;
             body.linearVelocity = Vector2.zero;
             body.angularVelocity = 0f;
         }
         else
         {
-            Vector3 position = transform.position;
-            transform.position = new Vector3(previousJumpReturnPosition.x, previousJumpReturnPosition.y, position.z);
+            Vector3 currentPosition = transform.position;
+            transform.position = new Vector3(position.x, position.y, currentPosition.z);
         }
 
         Physics2D.SyncTransforms();
