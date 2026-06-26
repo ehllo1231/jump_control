@@ -20,6 +20,7 @@ public static class JumpReachabilityOverlay
     private const float RebuildIntervalSeconds = 0.1f;
     private const float HashPrecision = 1000f;
     private const float CollisionSkin = 0.01f;
+    private const float BroadPhasePadding = 0.02f;
     private const float InitialContactIgnoreDistance = 0.015f;
     private const float MinimumSimulationDeltaTime = 0.001f;
     private const float DefaultMinimumWallNormalX = 0.55f;
@@ -36,6 +37,8 @@ public static class JumpReachabilityOverlay
     private static readonly List<Vector3> meshVertices = new List<Vector3>(48000);
     private static readonly List<int> meshTriangles = new List<int>(72000);
     private static readonly List<Color32> meshColors = new List<Color32>(48000);
+    private static readonly List<ObstacleBounds> obstacleBoundsBuffer = new List<ObstacleBounds>(512);
+    private static readonly List<LandingTarget> landingTargetsBuffer = new List<LandingTarget>(128);
     private static readonly Dictionary<Platform2D, ReachCandidate> cachedCandidates = new Dictionary<Platform2D, ReachCandidate>();
     private static readonly ContactFilter2D obstacleFilter = new ContactFilter2D
     {
@@ -48,8 +51,9 @@ public static class JumpReachabilityOverlay
     private static Material areaMaterial;
     private static int cachedHash;
     private static bool hasCachedPreview;
-    private static double lastRebuildTime = -1000d;
+    private static double lastPreviewCheckTime = -1000d;
     private static Vector2 cachedStart;
+    private static float cachedPlayerHalfWidth;
     private static float cachedMinAngle;
     private static float cachedMaxAngle;
     private static float cachedMinPower;
@@ -60,7 +64,9 @@ public static class JumpReachabilityOverlay
     static JumpReachabilityOverlay()
     {
         SceneView.duringSceneGui += DrawReachability;
-        Selection.selectionChanged += SceneView.RepaintAll;
+        Selection.selectionChanged += InvalidatePreview;
+        EditorApplication.hierarchyChanged += InvalidatePreview;
+        Undo.undoRedoPerformed += InvalidatePreview;
         EditorApplication.playModeStateChanged += _ => SceneView.RepaintAll();
         EditorApplication.update += RepaintWhilePlaying;
     }
@@ -69,6 +75,7 @@ public static class JumpReachabilityOverlay
     {
         EditorPrefs.SetBool(EnabledKey, enabled);
         Menu.SetChecked(MenuPath, enabled);
+        lastPreviewCheckTime = -1000d;
         SceneView.RepaintAll();
     }
 
@@ -93,6 +100,12 @@ public static class JumpReachabilityOverlay
         }
     }
 
+    private static void InvalidatePreview()
+    {
+        lastPreviewCheckTime = -1000d;
+        SceneView.RepaintAll();
+    }
+
     private static void DrawReachability(SceneView sceneView)
     {
         if (!IsEnabled)
@@ -100,9 +113,35 @@ public static class JumpReachabilityOverlay
             return;
         }
 
+        Event currentEvent = Event.current;
+        if (currentEvent != null && currentEvent.type != EventType.Repaint)
+        {
+            return;
+        }
+
+        double now = EditorApplication.timeSinceStartup;
+        if (!hasCachedPreview || now - lastPreviewCheckTime >= RebuildIntervalSeconds)
+        {
+            RefreshPreviewIfNeeded(now);
+        }
+
+        if (!hasCachedPreview)
+        {
+            return;
+        }
+
+        DrawAreaMesh();
+        DrawStartMarker(cachedStart, cachedMinAngle, cachedMaxAngle, cachedMinPower, cachedMaxPower);
+        DrawReachableCandidates(cachedCandidates, cachedPlayerHalfWidth);
+    }
+
+    private static void RefreshPreviewIfNeeded(double now)
+    {
+        lastPreviewCheckTime = now;
         PlayerController player = FindPlayerController();
         if (player == null || player.JumpTuning == null)
         {
+            ClearCachedPreview();
             return;
         }
 
@@ -117,15 +156,32 @@ public static class JumpReachabilityOverlay
         List<Collider2D> obstacles = FindSceneObstacleColliders(player);
         int previewHash = ComputePreviewHash(player, body, jumpMotor, tuning, start, gravity, playerHalfSize, platforms, obstacles);
 
-        double now = EditorApplication.timeSinceStartup;
-        if (!hasCachedPreview || (previewHash != cachedHash && now - lastRebuildTime >= RebuildIntervalSeconds))
+        if (!hasCachedPreview || previewHash != cachedHash)
         {
-            RebuildPreview(player, body, jumpMotor, tuning, start, gravity, linearDamping, playerHalfSize, platforms, previewHash, now);
+            RebuildPreview(
+                player,
+                body,
+                jumpMotor,
+                tuning,
+                start,
+                gravity,
+                linearDamping,
+                playerHalfSize,
+                platforms,
+                obstacles,
+                previewHash);
         }
+    }
 
-        DrawAreaMesh();
-        DrawStartMarker(cachedStart, cachedMinAngle, cachedMaxAngle, cachedMinPower, cachedMaxPower);
-        DrawReachableCandidates(cachedCandidates, playerHalfSize.x);
+    private static void ClearCachedPreview()
+    {
+        cachedHash = 0;
+        cachedCandidates.Clear();
+        hasCachedPreview = false;
+        if (areaMesh != null)
+        {
+            areaMesh.Clear();
+        }
     }
 
     private static void RebuildPreview(
@@ -138,8 +194,8 @@ public static class JumpReachabilityOverlay
         float linearDamping,
         Vector2 playerHalfSize,
         List<Platform2D> platforms,
-        int previewHash,
-        double builtAt)
+        List<Collider2D> obstacles,
+        int previewHash)
     {
         Trajectory[,] trajectories = new Trajectory[PowerSampleCount, AngleSampleCount];
         Dictionary<Platform2D, ReachCandidate> candidates = new Dictionary<Platform2D, ReachCandidate>();
@@ -148,6 +204,8 @@ public static class JumpReachabilityOverlay
             Mathf.Max(0.01f, playerSize.x - CollisionSkin * 2f),
             Mathf.Max(0.01f, playerSize.y - CollisionSkin * 2f));
         WallBouncePreviewSettings wallBounceSettings = GetWallBouncePreviewSettings(tuning, jumpMotor);
+        BuildObstacleBounds(obstacles, obstacleBoundsBuffer);
+        BuildLandingTargets(platforms, playerHalfSize.x, playerHalfSize.y, landingTargetsBuffer);
 
         for (int powerIndex = 0; powerIndex < PowerSampleCount; powerIndex++)
         {
@@ -166,14 +224,13 @@ public static class JumpReachabilityOverlay
                     gravity,
                     linearDamping,
                     castSize,
+                    obstacleBoundsBuffer,
                     wallBounceSettings);
                 trajectories[powerIndex, angleIndex] = trajectory;
 
                 CollectReachableCandidates(
                     trajectory,
-                    platforms,
-                    playerHalfSize.x,
-                    playerHalfSize.y,
+                    landingTargetsBuffer,
                     normalizedPower,
                     angle,
                     candidates);
@@ -189,11 +246,11 @@ public static class JumpReachabilityOverlay
 
         cachedHash = previewHash;
         cachedStart = start;
+        cachedPlayerHalfWidth = playerHalfSize.x;
         cachedMinAngle = tuning.MinDirectionAngle;
         cachedMaxAngle = tuning.MaxDirectionAngle;
         cachedMinPower = tuning.MinimumJumpPower;
         cachedMaxPower = tuning.MaximumJumpPower;
-        lastRebuildTime = builtAt;
         hasCachedPreview = true;
     }
 
@@ -204,6 +261,7 @@ public static class JumpReachabilityOverlay
         Vector2 gravity,
         float linearDamping,
         Vector2 castSize,
+        List<ObstacleBounds> obstacleBounds,
         WallBouncePreviewSettings wallBounceSettings)
     {
         float previewSeconds = CalculatePreviewSeconds(launchVelocity, gravity);
@@ -228,7 +286,14 @@ public static class JumpReachabilityOverlay
                 velocity = ApplyLinearDamping(velocity, linearDamping, deltaTime);
 
                 Vector2 nextPosition = position + velocity * deltaTime;
-                if (TryFindObstacleHit(player, start, position, nextPosition, castSize, out ObstacleHit obstacleHit))
+                if (TryFindObstacleHit(
+                    player,
+                    start,
+                    position,
+                    nextPosition,
+                    castSize,
+                    obstacleBounds,
+                    out ObstacleHit obstacleHit))
                 {
                     trajectory.Add(obstacleHit.Point);
 
@@ -272,6 +337,7 @@ public static class JumpReachabilityOverlay
         Vector2 from,
         Vector2 to,
         Vector2 castSize,
+        List<ObstacleBounds> obstacleBounds,
         out ObstacleHit obstacleHit)
     {
         obstacleHit = default;
@@ -283,6 +349,11 @@ public static class JumpReachabilityOverlay
         }
 
         Vector2 direction = delta / distance;
+        if (!MightHitObstacle(from, to, castSize, obstacleBounds))
+        {
+            return false;
+        }
+
         int hitCount = Physics2D.BoxCast(from, castSize, 0f, direction, obstacleFilter, castHits, distance);
         float nearestDistance = float.PositiveInfinity;
         Vector2 nearestNormal = Vector2.zero;
@@ -319,6 +390,32 @@ public static class JumpReachabilityOverlay
         float fraction = distance > 0.0001f ? Mathf.Clamp01(nearestDistance / distance) : 1f;
         obstacleHit = new ObstacleHit(from + direction * nearestDistance, nearestNormal, fraction);
         return true;
+    }
+
+    private static bool MightHitObstacle(
+        Vector2 from,
+        Vector2 to,
+        Vector2 castSize,
+        List<ObstacleBounds> obstacleBounds)
+    {
+        if (obstacleBounds.Count == 0)
+        {
+            return false;
+        }
+
+        Vector2 halfSize = castSize * 0.5f;
+        Vector2 min = Vector2.Min(from, to) - halfSize - Vector2.one * BroadPhasePadding;
+        Vector2 max = Vector2.Max(from, to) + halfSize + Vector2.one * BroadPhasePadding;
+
+        for (int i = 0; i < obstacleBounds.Count; i++)
+        {
+            if (obstacleBounds[i].Intersects(min, max))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool TryCalculateWallBounceVelocity(
@@ -541,6 +638,47 @@ public static class JumpReachabilityOverlay
         return sceneColliders;
     }
 
+    private static void BuildObstacleBounds(List<Collider2D> obstacles, List<ObstacleBounds> bounds)
+    {
+        bounds.Clear();
+        foreach (Collider2D collider in obstacles)
+        {
+            if (collider == null)
+            {
+                continue;
+            }
+
+            bounds.Add(new ObstacleBounds(collider.bounds));
+        }
+    }
+
+    private static void BuildLandingTargets(
+        List<Platform2D> platforms,
+        float playerHalfWidth,
+        float playerHalfHeight,
+        List<LandingTarget> targets)
+    {
+        targets.Clear();
+        foreach (Platform2D platform in platforms)
+        {
+            if (platform == null
+                || !platform.TryGetTopLandingSegment(
+                    playerHalfWidth,
+                    out float minStandX,
+                    out float maxStandX,
+                    out float platformTopY))
+            {
+                continue;
+            }
+
+            targets.Add(new LandingTarget(
+                platform,
+                minStandX,
+                maxStandX,
+                platformTopY + playerHalfHeight));
+        }
+    }
+
     private static Vector2 GetStartPosition(PlayerController player, Rigidbody2D body)
     {
         if (Application.isPlaying && body != null)
@@ -651,9 +789,7 @@ public static class JumpReachabilityOverlay
 
     private static void CollectReachableCandidates(
         Trajectory trajectory,
-        List<Platform2D> platforms,
-        float playerHalfWidth,
-        float playerHalfHeight,
+        List<LandingTarget> landingTargets,
         float normalizedPower,
         float angle,
         Dictionary<Platform2D, ReachCandidate> candidates)
@@ -667,16 +803,16 @@ public static class JumpReachabilityOverlay
                 continue;
             }
 
-            foreach (Platform2D platform in platforms)
+            foreach (LandingTarget target in landingTargets)
             {
-                if (candidates.ContainsKey(platform))
+                if (candidates.ContainsKey(target.Platform))
                 {
                     continue;
                 }
 
-                if (TryFindLandingPoint(previous, current, platform, playerHalfWidth, playerHalfHeight, out Vector2 landingPoint))
+                if (TryFindLandingPoint(previous, current, target, out Vector2 landingPoint))
                 {
-                    candidates.Add(platform, new ReachCandidate(landingPoint, normalizedPower, angle));
+                    candidates.Add(target.Platform, new ReachCandidate(landingPoint, normalizedPower, angle));
                 }
             }
         }
@@ -685,22 +821,11 @@ public static class JumpReachabilityOverlay
     private static bool TryFindLandingPoint(
         Vector2 previous,
         Vector2 current,
-        Platform2D platform,
-        float playerHalfWidth,
-        float playerHalfHeight,
+        LandingTarget target,
         out Vector2 landingPoint)
     {
         landingPoint = default;
-        if (!platform.TryGetTopLandingSegment(
-            playerHalfWidth,
-            out float minStandX,
-            out float maxStandX,
-            out float platformTopY))
-        {
-            return false;
-        }
-
-        float centerLandingY = platformTopY + playerHalfHeight;
+        float centerLandingY = target.CenterLandingY;
         if (previous.y < centerLandingY || current.y > centerLandingY)
         {
             return false;
@@ -719,7 +844,7 @@ public static class JumpReachabilityOverlay
         }
 
         float x = Mathf.Lerp(previous.x, current.x, ratio);
-        if (minStandX > maxStandX || x < minStandX || x > maxStandX)
+        if (target.MinStandX > target.MaxStandX || x < target.MinStandX || x > target.MaxStandX)
         {
             return false;
         }
@@ -915,6 +1040,44 @@ public static class JumpReachabilityOverlay
             Points[Count] = new Vector3(point.x, point.y, 0f);
             Count++;
         }
+    }
+
+    private readonly struct ObstacleBounds
+    {
+        public ObstacleBounds(Bounds bounds)
+        {
+            Vector3 min = bounds.min;
+            Vector3 max = bounds.max;
+            Min = new Vector2(min.x, min.y);
+            Max = new Vector2(max.x, max.y);
+        }
+
+        private Vector2 Min { get; }
+        private Vector2 Max { get; }
+
+        public bool Intersects(Vector2 min, Vector2 max)
+        {
+            return min.x <= Max.x
+                && max.x >= Min.x
+                && min.y <= Max.y
+                && max.y >= Min.y;
+        }
+    }
+
+    private readonly struct LandingTarget
+    {
+        public LandingTarget(Platform2D platform, float minStandX, float maxStandX, float centerLandingY)
+        {
+            Platform = platform;
+            MinStandX = minStandX;
+            MaxStandX = maxStandX;
+            CenterLandingY = centerLandingY;
+        }
+
+        public Platform2D Platform { get; }
+        public float MinStandX { get; }
+        public float MaxStandX { get; }
+        public float CenterLandingY { get; }
     }
 
     private readonly struct ObstacleHit

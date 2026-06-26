@@ -23,7 +23,7 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 | UC-003-03 | 선택한 두 Platform 거리 표시 | Implemented | [문서](./UC-003-03-measure-selected-platforms.md) | 2026-06-21 |
 | UC-003-04 | 선택 Platform에서 플레이 테스트 시작 | Implemented | [문서](./UC-003-04-start-playtest-from-platform.md) | 2026-06-21 |
 | UC-003-05 | Play Mode 생성 Platform 유지 | Implemented | [문서](./UC-003-05-persist-play-mode-platforms.md) | 2026-06-22 |
-| UC-003-06 | 점프 도달 후보 표시 | Implemented | [문서](./UC-003-06-show-jump-reachability.md) | 2026-06-22 |
+| UC-003-06 | 점프 도달 후보 표시 | Implemented | [문서](./UC-003-06-show-jump-reachability.md) | 2026-06-26 |
 | UC-003-07 | 기본 Platform 색상 일관성 유지 | Implemented | [문서](./UC-003-07-keep-platform-color-consistent.md) | 2026-06-22 |
 | UC-003-08 | 코드 수정 중 사용자 맵 구성 보존 | Implemented | [문서](./UC-003-08-preserve-user-map-edits.md) | 2026-06-23 |
 | UC-003-09 | 삼각형 Platform 생성 | Implemented | [문서](./UC-003-09-create-triangle-platform.md) | 2026-06-25 |
