@@ -6,7 +6,7 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 
 | ID | 제목 | 상태 | 문서 | 갱신일 |
 | --- | --- | --- | --- | --- |
-| UC-001 | 사용자 점프 | Implemented | [문서](./UC-001-player-jump.md) | 2026-06-26 |
+| UC-001 | 사용자 점프 | Implemented | [문서](./UC-001-player-jump.md) | 2026-06-27 |
 | UC-002 | 실시간 점프 튜닝 기능군 | Superseded | [문서](./UC-002-live-jump-tuning.md) | 2026-06-24 |
 | UC-002-01 | 점프 튜닝 대상 선택 | Implemented | [문서](./UC-002-01-select-jump-tuning-target.md) | 2026-06-21 |
 | UC-002-02 | 플레이어 크기 튜닝 | Implemented | [문서](./UC-002-02-tune-player-size.md) | 2026-06-21 |
@@ -33,3 +33,4 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 | UC-004-01 | 배경음악 일시정지 지점 재개 | Implemented | [문서](./UC-004-01-resume-background-music.md) | 2026-06-26 |
 | UC-004-02 | Android 빌드 배경음악 재생 | Implemented | [문서](./UC-004-02-play-background-music-on-android.md) | 2026-06-27 |
 | UC-005-01 | Android 앱 가로 실행 | Implemented | [문서](./UC-005-01-launch-android-in-landscape.md) | 2026-06-27 |
+| UC-005-02 | Android 120 FPS 및 터치 반응성 | Implemented | [문서](./UC-005-02-run-android-at-120-fps.md) | 2026-06-27 |

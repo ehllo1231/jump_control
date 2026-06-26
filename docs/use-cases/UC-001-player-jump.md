@@ -1,7 +1,7 @@
 # UC-001: 사용자 점프
 
 - 상태: Implemented
-- 마지막 갱신일: 2026-06-26
+- 마지막 갱신일: 2026-06-27
 
 ## 목적
 
@@ -73,6 +73,7 @@
 - Unity 내장 Roslyn 컴파일러로 전체 런타임 스크립트 컴파일을 확인했다. 오류는 없고 기존 직렬화 필드 관련 경고 2건만 발생했다.
 - Play Mode 직접 실행 검증은 수행하지 않았으므로 상태는 `Verified`가 아닌 `Implemented`로 유지한다.
 - 2026-06-26 `JumpInputReader`가 Android 터치 입력을 기존 점프 버튼 입력과 같은 held/pressed/released 신호로 처리하도록 구현했다. Unity 프로젝트가 이미 열려 있어 batchmode 검증은 실행하지 못했고, Unity 포함 C# 컴파일러로 수정한 입력/오디오 런타임 스크립트 컴파일을 확인했다.
+- 2026-06-27 Android 터치 입력 경로를 확인했다. `JumpInputReader`는 터치 시작과 종료를 매 프레임 즉시 `WasPressed`/`WasReleased`로 변환하고 있어 추가 프레임 지연은 확인되지 않았다.
 
 ## 미결 질문
 
