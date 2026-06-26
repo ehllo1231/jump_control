@@ -34,3 +34,4 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 | UC-004-02 | Android 빌드 배경음악 재생 | Implemented | [문서](./UC-004-02-play-background-music-on-android.md) | 2026-06-27 |
 | UC-005-01 | Android 앱 가로 실행 | Implemented | [문서](./UC-005-01-launch-android-in-landscape.md) | 2026-06-27 |
 | UC-005-02 | Android 120 FPS 및 터치 반응성 | Implemented | [문서](./UC-005-02-run-android-at-120-fps.md) | 2026-06-27 |
+| UC-006-01 | 재시작 시 플레이어 위치 복원 | Implemented | [문서](./UC-006-01-resume-player-position-after-restart.md) | 2026-06-27 |

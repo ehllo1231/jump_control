@@ -30,6 +30,9 @@ public class PlayerController : MonoBehaviour
     private const float CustomJumpWindowHeight = 126f;
     private const float DebugJumpHistorySamePositionToleranceSqr = 0.000001f;
     private const int CustomJumpWindowId = 240624;
+    private const string SavedPlayerPositionExistsKey = "JumpTiming.PlayerPosition.Exists";
+    private const string SavedPlayerPositionXKey = "JumpTiming.PlayerPosition.X";
+    private const string SavedPlayerPositionYKey = "JumpTiming.PlayerPosition.Y";
     private static readonly Vector2 CustomJumpButtonWorldOffset = new Vector2(1.1f, 0.55f);
 
     [Header("References")]
@@ -85,6 +88,7 @@ public class PlayerController : MonoBehaviour
     {
         CacheReferences();
         ApplyJumpTuning();
+        RestoreSavedPlayerPosition();
     }
 
     private void Start()
@@ -132,6 +136,19 @@ public class PlayerController : MonoBehaviour
                 UpdateJumping(grounded);
                 break;
         }
+    }
+
+    private void OnApplicationPause(bool pauseStatus)
+    {
+        if (pauseStatus)
+        {
+            SaveCurrentPlayerPosition();
+        }
+    }
+
+    private void OnApplicationQuit()
+    {
+        SaveCurrentPlayerPosition();
     }
 
     private void OnGUI()
@@ -413,6 +430,66 @@ public class PlayerController : MonoBehaviour
     private Vector2 GetCurrentPosition()
     {
         return body != null ? body.position : (Vector2)transform.position;
+    }
+
+    private void SaveCurrentPlayerPosition()
+    {
+        Vector2 currentPosition = GetCurrentPosition();
+        if (!IsValidSavedPlayerPosition(currentPosition))
+        {
+            return;
+        }
+
+        PlayerPrefs.SetInt(SavedPlayerPositionExistsKey, 1);
+        PlayerPrefs.SetFloat(SavedPlayerPositionXKey, currentPosition.x);
+        PlayerPrefs.SetFloat(SavedPlayerPositionYKey, currentPosition.y);
+        PlayerPrefs.Save();
+    }
+
+    private void RestoreSavedPlayerPosition()
+    {
+        if (!TryLoadSavedPlayerPosition(out Vector2 savedPosition))
+        {
+            return;
+        }
+
+        if (body != null)
+        {
+            body.position = savedPosition;
+            body.linearVelocity = Vector2.zero;
+            body.angularVelocity = 0f;
+        }
+        else
+        {
+            Vector3 currentPosition = transform.position;
+            transform.position = new Vector3(savedPosition.x, savedPosition.y, currentPosition.z);
+        }
+
+        Physics2D.SyncTransforms();
+    }
+
+    private static bool TryLoadSavedPlayerPosition(out Vector2 savedPosition)
+    {
+        savedPosition = default;
+        if (PlayerPrefs.GetInt(SavedPlayerPositionExistsKey, 0) != 1)
+        {
+            return false;
+        }
+
+        savedPosition = new Vector2(
+            PlayerPrefs.GetFloat(SavedPlayerPositionXKey),
+            PlayerPrefs.GetFloat(SavedPlayerPositionYKey));
+        return IsValidSavedPlayerPosition(savedPosition);
+    }
+
+    private static bool IsValidSavedPlayerPosition(Vector2 position)
+    {
+        return IsFinite(position.x) && IsFinite(position.y);
+    }
+
+    private static bool IsFinite(float value)
+    {
+        return !float.IsNaN(value) && !float.IsInfinity(value);
     }
 
     private void MoveToDebugJumpHistoryPosition(Vector2 position)
