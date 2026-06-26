@@ -17,7 +17,7 @@ public static class MVPSceneBuilder
     private const string PlayerPrefabPath = "Assets/Prefabs/Player.prefab";
     private const string PlatformPrefabPath = "Assets/Prefabs/Platform.prefab";
     private const string WhiteSpritePath = "Assets/Sprites/MVPWhiteSquare.png";
-    private const string MusicClipPath = "Assets/music/first_castle.mp3";
+    private const string MusicClipPath = "Assets/Resources/Music/first_castle.mp3";
     private const string PlayerPhysicsPath = "Assets/Materials/MVPPlayerPhysics.physicsMaterial2D";
     private const string PlatformPhysicsPath = "Assets/Materials/MVPPlatformPhysics.physicsMaterial2D";
     private static readonly Color PlatformColor = new Color(0.22f, 0.24f, 0.27f);

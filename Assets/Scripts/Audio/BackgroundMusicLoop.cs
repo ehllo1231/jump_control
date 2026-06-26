@@ -233,7 +233,7 @@ public sealed class BackgroundMusicLoop : MonoBehaviour
 
 public static class BackgroundMusicBootstrap
 {
-    private const string EditorMusicClipPath = "Assets/music/first_castle.mp3";
+    private const string EditorMusicClipPath = "Assets/Resources/Music/first_castle.mp3";
     private const string ResourcesMusicClipPath = "Music/first_castle";
     private const float DefaultVolume = 0.75f;
     private const float DefaultFadeOutDuration = 3f;
@@ -250,7 +250,8 @@ public static class BackgroundMusicBootstrap
         if (musicClip == null)
         {
             Debug.LogWarning(
-                $"Background music clip was not found. Expected {EditorMusicClipPath} in the editor.");
+                $"Background music clip was not found. Expected Resources path {ResourcesMusicClipPath}"
+                + $" or {EditorMusicClipPath} in the editor.");
             return;
         }
 

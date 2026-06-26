@@ -31,3 +31,5 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 | UC-003-10 | Platform 회전 조정 | Implemented | [문서](./UC-003-10-rotate-platform.md) | 2026-06-22 |
 | UC-003-11 | 직각 삼각형 Platform 생성 및 편집 | Implemented | [문서](./UC-003-11-create-right-triangle-platform.md) | 2026-06-25 |
 | UC-004-01 | 배경음악 일시정지 지점 재개 | Implemented | [문서](./UC-004-01-resume-background-music.md) | 2026-06-26 |
+| UC-004-02 | Android 빌드 배경음악 재생 | Implemented | [문서](./UC-004-02-play-background-music-on-android.md) | 2026-06-27 |
+| UC-005-01 | Android 앱 가로 실행 | Implemented | [문서](./UC-005-01-launch-android-in-landscape.md) | 2026-06-27 |

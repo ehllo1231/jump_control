@@ -6,7 +6,7 @@ using UnityEngine.SceneManagement;
 public static class BackgroundMusicSceneSetup
 {
     private const string ScenePath = "Assets/Scenes/MVPJumpScene.unity";
-    private const string MusicClipPath = "Assets/music/first_castle.mp3";
+    private const string MusicClipPath = "Assets/Resources/Music/first_castle.mp3";
     private const string MusicObjectName = "Background Music";
     private const float DefaultVolume = 0.75f;
     private const float DefaultFadeOutDuration = 3f;
