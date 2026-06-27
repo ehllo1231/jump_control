@@ -37,3 +37,4 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 | UC-006-01 | 재시작 시 플레이어 위치 복원 | Implemented | [문서](./UC-006-01-resume-player-position-after-restart.md) | 2026-06-27 |
 | UC-007-01 | 플레이테스트 이동 및 이벤트 로그 기록 | Implemented | [문서](./UC-007-01-record-playtest-logs.md) | 2026-06-27 |
 | UC-007-02 | 플레이테스트 로그 Scene View 시각화 | Implemented | [문서](./UC-007-02-visualize-playtest-logs.md) | 2026-06-27 |
+| UC-007-03 | 플레이테스트 로그 뷰어 툴 | Implemented | [문서](./UC-007-03-view-playtest-logs-in-tool.md) | 2026-06-27 |
