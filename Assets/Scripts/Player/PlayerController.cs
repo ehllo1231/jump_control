@@ -77,6 +77,7 @@ public class PlayerController : MonoBehaviour
     public float LastJumpAngle => lastJumpAngle;
     public Vector2 LastJumpVector => lastJumpVector;
     public JumpTuningConfig JumpTuning => jumpTuning;
+    public event System.Action<PlayerController> JumpExecuted;
 
     public void ApplyJumpTuningNow()
     {
@@ -313,6 +314,7 @@ public class PlayerController : MonoBehaviour
 
         playerVisual.OnJump(direction);
         playerVisual.SetState(currentState);
+        JumpExecuted?.Invoke(this);
     }
 
     private bool UpdateDebugCustomJump(bool grounded)
