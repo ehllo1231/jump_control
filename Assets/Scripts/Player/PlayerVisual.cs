@@ -34,6 +34,7 @@ public class PlayerVisual : MonoBehaviour
     private static Material hitboxOutlineMaterial;
     private LineRenderer hitboxOutline;
     private bool isSyncing;
+    private bool facingLeft;
 
     private void Awake()
     {
@@ -89,10 +90,14 @@ public class PlayerVisual : MonoBehaviour
 
     public void OnJump(Vector2 direction)
     {
-        if (bodyRenderer != null && Mathf.Abs(direction.x) > 0.01f)
+        if (Mathf.Abs(direction.x) <= 0.01f)
         {
-            bodyRenderer.flipX = direction.x < 0f;
+            return;
         }
+
+        facingLeft = direction.x < 0f;
+        CacheReferences();
+        SyncVisualAndCollider();
     }
 
     public void SetBodySize(
@@ -173,8 +178,16 @@ public class PlayerVisual : MonoBehaviour
         float spriteBottom = GetSpriteLocalBottom() * visualScaleFactor;
         float bodyBottom = -safeBodySize * 0.5f;
         float visualOffsetY = bodyBottom - spriteBottom + visualYOffset;
-        Vector3 targetPosition = new Vector3(visualXOffset, visualOffsetY, 0f);
-        Vector3 targetScale = new Vector3(visualScaleFactor, visualScaleFactor, 1f);
+        float mirrorAxisX = GetVisualMirrorAxisX();
+        float visualOffsetX = facingLeft ? mirrorAxisX * 2f - visualXOffset : visualXOffset;
+        float visualScaleX = facingLeft ? -visualScaleFactor : visualScaleFactor;
+        Vector3 targetPosition = new Vector3(visualOffsetX, visualOffsetY, 0f);
+        Vector3 targetScale = new Vector3(visualScaleX, visualScaleFactor, 1f);
+
+        if (bodyRenderer != null && bodyRenderer.flipX)
+        {
+            bodyRenderer.flipX = false;
+        }
 
         if ((visualRoot.localPosition - targetPosition).sqrMagnitude > AlignmentTolerance)
         {
@@ -200,6 +213,11 @@ public class PlayerVisual : MonoBehaviour
         }
 
         bodyCollider.offset = Vector2.zero;
+    }
+
+    private float GetVisualMirrorAxisX()
+    {
+        return bodyCollider != null && IsFinite(bodyCollider.offset.x) ? bodyCollider.offset.x : 0f;
     }
 
     private float GetConfiguredBodySize()
