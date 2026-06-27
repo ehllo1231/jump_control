@@ -140,7 +140,6 @@ public sealed class PlaytestLogWindow : EditorWindow
             EditorGUILayout.IntField("Movement Samples", selectedLog.Samples.Count);
             EditorGUILayout.IntField("Jump Events", selectedLog.Jumps.Count);
             EditorGUILayout.IntField("Fall Events", selectedLog.Falls.Count);
-            EditorGUILayout.IntField("Max Trail Density", selectedLog.MaxSegmentDensity);
         }
 
         using (new EditorGUILayout.HorizontalScope())
@@ -160,7 +159,7 @@ public sealed class PlaytestLogWindow : EditorWindow
         }
 
         EditorGUILayout.HelpBox(
-            "Scene View에서 이동 궤적은 파란 선으로, 많이 겹친 구간은 더 굵고 밝게 표시됩니다. 점프는 청록 원, 낙하는 빨간 X로 표시됩니다.",
+            "Scene View에서 이동 궤적은 파란 선으로 표시됩니다. 점프는 청록 원, 낙하는 빨간 X로 표시됩니다.",
             MessageType.None);
     }
 
@@ -227,10 +226,9 @@ public sealed class PlaytestLogWindow : EditorWindow
 internal static class PlaytestLogSceneOverlay
 {
     private const string ShowOverlayKey = "JumpTiming.PlaytestLogs.ShowOverlay";
-    private const float DensityCellSize = 0.75f;
+    private const float TrailLineWidth = 2.5f;
 
     private static readonly Color trailColor = new Color(0.12f, 0.72f, 1f, 0.32f);
-    private static readonly Color denseTrailColor = new Color(1f, 0.76f, 0.12f, 0.88f);
     private static readonly Color jumpColor = new Color(0.1f, 1f, 0.78f, 0.95f);
     private static readonly Color fallColor = new Color(1f, 0.18f, 0.16f, 0.98f);
     private static readonly Vector3[] lineBuffer = new Vector3[2];
@@ -256,7 +254,7 @@ internal static class PlaytestLogSceneOverlay
         data = nextData;
         if (data != null)
         {
-            data.RebuildSegments(DensityCellSize);
+            data.RebuildSegments();
         }
 
         SceneView.RepaintAll();
@@ -301,18 +299,13 @@ internal static class PlaytestLogSceneOverlay
 
     private static void DrawSegments()
     {
-        int maxDensity = Mathf.Max(1, data.MaxSegmentDensity);
+        Handles.color = trailColor;
         for (int i = 0; i < data.Segments.Count; i++)
         {
             PlaytestLogSegment segment = data.Segments[i];
-            float normalizedDensity = maxDensity <= 1
-                ? 0f
-                : Mathf.InverseLerp(1f, maxDensity, segment.Density);
-            Handles.color = Color.Lerp(trailColor, denseTrailColor, normalizedDensity);
-
             lineBuffer[0] = new Vector3(segment.Start.x, segment.Start.y, 0f);
             lineBuffer[1] = new Vector3(segment.End.x, segment.End.y, 0f);
-            Handles.DrawAAPolyLine(Mathf.Lerp(2.5f, 8f, normalizedDensity), lineBuffer);
+            Handles.DrawAAPolyLine(TrailLineWidth, lineBuffer);
         }
     }
 
@@ -404,7 +397,7 @@ internal static class PlaytestLogFileReader
                 AddRecord(loaded, record);
             }
 
-            loaded.RebuildSegments(0.75f);
+            loaded.RebuildSegments();
             data = loaded;
             if (skippedLines > 0)
             {
@@ -485,7 +478,6 @@ internal sealed class PlaytestLogData
     private Bounds bounds;
 
     public string SceneName;
-    public int MaxSegmentDensity { get; private set; }
     public bool HasBounds { get; private set; }
     public Bounds Bounds => bounds;
 
@@ -508,16 +500,14 @@ internal sealed class PlaytestLogData
         bounds.Encapsulate(worldPosition);
     }
 
-    public void RebuildSegments(float cellSize)
+    public void RebuildSegments()
     {
         Segments.Clear();
-        MaxSegmentDensity = 0;
         if (Samples.Count < 2)
         {
             return;
         }
 
-        Dictionary<Vector2Int, int> densityByCell = new Dictionary<Vector2Int, int>();
         for (int i = 1; i < Samples.Count; i++)
         {
             Vector2 start = Samples[i - 1];
@@ -527,34 +517,8 @@ internal sealed class PlaytestLogData
                 continue;
             }
 
-            Vector2Int cell = GetSegmentCell(start, end, cellSize);
-            densityByCell.TryGetValue(cell, out int density);
-            densityByCell[cell] = density + 1;
+            Segments.Add(new PlaytestLogSegment(start, end));
         }
-
-        for (int i = 1; i < Samples.Count; i++)
-        {
-            Vector2 start = Samples[i - 1];
-            Vector2 end = Samples[i];
-            if ((end - start).sqrMagnitude <= 0.000001f)
-            {
-                continue;
-            }
-
-            Vector2Int cell = GetSegmentCell(start, end, cellSize);
-            int density = densityByCell.TryGetValue(cell, out int foundDensity) ? foundDensity : 1;
-            MaxSegmentDensity = Mathf.Max(MaxSegmentDensity, density);
-            Segments.Add(new PlaytestLogSegment(start, end, density));
-        }
-    }
-
-    private static Vector2Int GetSegmentCell(Vector2 start, Vector2 end, float cellSize)
-    {
-        float safeCellSize = Mathf.Max(0.01f, cellSize);
-        Vector2 midpoint = (start + end) * 0.5f;
-        return new Vector2Int(
-            Mathf.FloorToInt(midpoint.x / safeCellSize),
-            Mathf.FloorToInt(midpoint.y / safeCellSize));
     }
 }
 
@@ -578,12 +542,10 @@ internal readonly struct PlaytestLogSegment
 {
     public readonly Vector2 Start;
     public readonly Vector2 End;
-    public readonly int Density;
 
-    public PlaytestLogSegment(Vector2 start, Vector2 end, int density)
+    public PlaytestLogSegment(Vector2 start, Vector2 end)
     {
         Start = start;
         End = end;
-        Density = density;
     }
 }
