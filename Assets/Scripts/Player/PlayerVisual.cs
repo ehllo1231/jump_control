@@ -10,6 +10,9 @@ public class PlayerVisual : MonoBehaviour
     private const float MinimumBodySize = 0.1f;
     private const float MinimumVisualScale = 0.1f;
     private const float AlignmentTolerance = 0.000001f;
+    private const float HitboxOutlineWidth = 0.018f;
+    private const string HitboxOutlineName = "Hitbox Debug Outline";
+    private static readonly Color HitboxOutlineColor = new Color(0.62f, 1f, 0.42f, 0.9f);
 
     [Header("References")]
     [SerializeField] private Transform visualRoot;
@@ -24,7 +27,11 @@ public class PlayerVisual : MonoBehaviour
     [SerializeField] private Color jumpingColor = new Color(1f, 0.42f, 0.3f);
     [SerializeField, HideInInspector] private float configuredBodySize = 0.72f;
     [SerializeField, HideInInspector] private float configuredVisualScale = 1f;
+    [SerializeField, HideInInspector] private float configuredVisualYOffset;
+    [SerializeField, HideInInspector] private bool debugHitboxVisible;
 
+    private static Material hitboxOutlineMaterial;
+    private LineRenderer hitboxOutline;
     private bool isSyncing;
 
     private void Awake()
@@ -41,6 +48,11 @@ public class PlayerVisual : MonoBehaviour
     private void LateUpdate()
     {
         SyncVisualAndCollider();
+    }
+
+    private void OnDisable()
+    {
+        SetHitboxOutlineActive(false);
     }
 
     public void SetState(PlayerJumpState state)
@@ -82,7 +94,11 @@ public class PlayerVisual : MonoBehaviour
         }
     }
 
-    public void SetBodySize(float size, float visualScale = 1f)
+    public void SetBodySize(
+        float size,
+        float visualScale = 1f,
+        float visualYOffset = 0f,
+        bool showDebugHitbox = false)
     {
         CacheReferences();
 
@@ -90,13 +106,16 @@ public class PlayerVisual : MonoBehaviour
         float safeVisualScale = Mathf.Max(MinimumVisualScale, visualScale);
         configuredBodySize = safeSize;
         configuredVisualScale = safeVisualScale;
+        configuredVisualYOffset = IsFinite(visualYOffset) ? visualYOffset : 0f;
+        debugHitboxVisible = showDebugHitbox;
         if (bodyCollider != null)
         {
             bodyCollider.offset = Vector2.zero;
             bodyCollider.size = Vector2.one * safeSize;
         }
 
-        ApplyVisualTransform(safeSize, safeVisualScale);
+        ApplyVisualTransform(safeSize, safeVisualScale, configuredVisualYOffset);
+        UpdateHitboxOutline();
     }
 
     private void CacheReferences()
@@ -128,11 +147,12 @@ public class PlayerVisual : MonoBehaviour
         isSyncing = true;
         CacheReferences();
         SyncColliderOffset();
-        ApplyVisualTransform(GetConfiguredBodySize(), GetConfiguredVisualScale());
+        ApplyVisualTransform(GetConfiguredBodySize(), GetConfiguredVisualScale(), GetConfiguredVisualYOffset());
+        UpdateHitboxOutline();
         isSyncing = false;
     }
 
-    private void ApplyVisualTransform(float bodySize, float visualScale)
+    private void ApplyVisualTransform(float bodySize, float visualScale, float visualYOffset)
     {
         if (visualRoot == null || visualRoot == transform)
         {
@@ -145,7 +165,7 @@ public class PlayerVisual : MonoBehaviour
         float visualScaleFactor = targetVisualHeight / spriteHeight;
         float spriteBottom = GetSpriteLocalBottom() * visualScaleFactor;
         float bodyBottom = -safeBodySize * 0.5f;
-        float visualOffsetY = bodyBottom - spriteBottom;
+        float visualOffsetY = bodyBottom - spriteBottom + visualYOffset;
         Vector3 targetPosition = new Vector3(0f, visualOffsetY, 0f);
         Vector3 targetScale = new Vector3(visualScaleFactor, visualScaleFactor, 1f);
 
@@ -195,6 +215,11 @@ public class PlayerVisual : MonoBehaviour
         return Mathf.Max(MinimumVisualScale, configuredVisualScale);
     }
 
+    private float GetConfiguredVisualYOffset()
+    {
+        return IsFinite(configuredVisualYOffset) ? configuredVisualYOffset : 0f;
+    }
+
     private float GetSpriteLocalHeight()
     {
         if (bodyRenderer == null || bodyRenderer.sprite == null)
@@ -213,6 +238,123 @@ public class PlayerVisual : MonoBehaviour
         }
 
         return bodyRenderer.sprite.bounds.min.y;
+    }
+
+    private void UpdateHitboxOutline()
+    {
+        if (!debugHitboxVisible || bodyCollider == null || !isActiveAndEnabled)
+        {
+            SetHitboxOutlineActive(false);
+            return;
+        }
+
+        EnsureHitboxOutline();
+        if (hitboxOutline == null)
+        {
+            return;
+        }
+
+        hitboxOutline.gameObject.SetActive(true);
+        hitboxOutline.transform.localPosition = Vector3.zero;
+        hitboxOutline.transform.localRotation = Quaternion.identity;
+        hitboxOutline.transform.localScale = Vector3.one;
+        hitboxOutline.startWidth = HitboxOutlineWidth;
+        hitboxOutline.endWidth = HitboxOutlineWidth;
+        hitboxOutline.startColor = HitboxOutlineColor;
+        hitboxOutline.endColor = HitboxOutlineColor;
+
+        Vector2 offset = bodyCollider.offset;
+        Vector2 size = bodyCollider.size;
+        float left = offset.x - size.x * 0.5f;
+        float right = offset.x + size.x * 0.5f;
+        float bottom = offset.y - size.y * 0.5f;
+        float top = offset.y + size.y * 0.5f;
+
+        hitboxOutline.positionCount = 4;
+        hitboxOutline.SetPosition(0, new Vector3(left, bottom, -0.02f));
+        hitboxOutline.SetPosition(1, new Vector3(left, top, -0.02f));
+        hitboxOutline.SetPosition(2, new Vector3(right, top, -0.02f));
+        hitboxOutline.SetPosition(3, new Vector3(right, bottom, -0.02f));
+    }
+
+    private void EnsureHitboxOutline()
+    {
+        if (hitboxOutline != null)
+        {
+            return;
+        }
+
+        Transform existing = transform.Find(HitboxOutlineName);
+        if (existing != null)
+        {
+            hitboxOutline = existing.GetComponent<LineRenderer>();
+        }
+
+        if (hitboxOutline == null)
+        {
+            GameObject outlineObject = new GameObject(HitboxOutlineName);
+            if (!Application.isPlaying)
+            {
+                outlineObject.hideFlags = HideFlags.DontSave;
+            }
+
+            outlineObject.transform.SetParent(transform, false);
+            hitboxOutline = outlineObject.AddComponent<LineRenderer>();
+        }
+
+        hitboxOutline.useWorldSpace = false;
+        hitboxOutline.loop = true;
+        hitboxOutline.textureMode = LineTextureMode.Stretch;
+        hitboxOutline.alignment = LineAlignment.TransformZ;
+        hitboxOutline.numCornerVertices = 0;
+        hitboxOutline.numCapVertices = 0;
+        hitboxOutline.sortingOrder = 100;
+        hitboxOutline.sharedMaterial = GetHitboxOutlineMaterial();
+    }
+
+    private void SetHitboxOutlineActive(bool active)
+    {
+        if (hitboxOutline == null)
+        {
+            Transform existing = transform.Find(HitboxOutlineName);
+            if (existing != null)
+            {
+                hitboxOutline = existing.GetComponent<LineRenderer>();
+            }
+        }
+
+        if (hitboxOutline != null)
+        {
+            hitboxOutline.gameObject.SetActive(active);
+        }
+    }
+
+    private static Material GetHitboxOutlineMaterial()
+    {
+        if (hitboxOutlineMaterial != null)
+        {
+            return hitboxOutlineMaterial;
+        }
+
+        Shader shader = Shader.Find("Sprites/Default");
+        if (shader == null)
+        {
+            shader = Shader.Find("Universal Render Pipeline/2D/Sprite-Unlit-Default");
+        }
+
+        if (shader == null)
+        {
+            shader = Shader.Find("Unlit/Color");
+        }
+
+        hitboxOutlineMaterial = new Material(shader);
+        hitboxOutlineMaterial.hideFlags = HideFlags.HideAndDontSave;
+        return hitboxOutlineMaterial;
+    }
+
+    private static bool IsFinite(float value)
+    {
+        return !float.IsNaN(value) && !float.IsInfinity(value);
     }
 
     private void OnValidate()

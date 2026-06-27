@@ -20,6 +20,7 @@ public sealed class JumpTuningConfig
     private const float MinimumPlayerSquareSize = 0.1f;
     private const float DefaultPlayerVisualScale = 1.8f;
     private const float MinimumPlayerVisualScale = 0.1f;
+    private const float DefaultPlayerVisualYOffset = 0f;
     private const float DefaultMinAngle = -62f;
     private const float DefaultMaxAngle = 62f;
     private const float DefaultSweepSpeed = 145f;
@@ -36,6 +37,8 @@ public sealed class JumpTuningConfig
     [SerializeField, Min(MinimumPlayerSquareSize)] private float playerSquareSize = DefaultPlayerSquareSize;
     [Tooltip("충돌체 크기는 유지하고 Player 스프라이트만 키우거나 줄이는 배율입니다.")]
     [SerializeField, Min(MinimumPlayerVisualScale)] private float playerVisualScale = DefaultPlayerVisualScale;
+    [Tooltip("충돌체는 유지하고 Player 스프라이트만 Y축으로 이동하는 오프셋입니다. 음수는 아래로 이동합니다.")]
+    [SerializeField] private float playerVisualYOffset = DefaultPlayerVisualYOffset;
 
     [Header("Collision")]
     [Tooltip("벽 충돌 시 반대 방향으로 되돌리는 속도 비율입니다. 바닥 착지에는 적용하지 않습니다.")]
@@ -64,6 +67,7 @@ public sealed class JumpTuningConfig
 
     public float PlayerSquareSize => Mathf.Max(MinimumPlayerSquareSize, playerSquareSize);
     public float PlayerVisualScale => Mathf.Max(MinimumPlayerVisualScale, playerVisualScale);
+    public float PlayerVisualYOffset => IsFinite(playerVisualYOffset) ? playerVisualYOffset : DefaultPlayerVisualYOffset;
     public float MinDirectionAngle => Mathf.Min(minDirectionAngle, maxDirectionAngle);
     public float MaxDirectionAngle => Mathf.Max(minDirectionAngle, maxDirectionAngle);
     public float DirectionSweepSpeed => Mathf.Max(0f, directionSweepSpeed);
@@ -89,6 +93,7 @@ public sealed class JumpTuningConfig
     {
         playerSquareSize = Mathf.Max(MinimumPlayerSquareSize, playerSquareSize);
         playerVisualScale = Mathf.Max(MinimumPlayerVisualScale, playerVisualScale);
+        playerVisualYOffset = IsFinite(playerVisualYOffset) ? playerVisualYOffset : DefaultPlayerVisualYOffset;
         wallBounceElasticity = Mathf.Clamp(wallBounceElasticity, 0f, MaximumWallBounceElasticity);
         wallBounceVerticalVelocityMode = NormalizeWallBounceVerticalVelocityMode(wallBounceVerticalVelocityMode);
         directionSweepSpeed = Mathf.Max(0f, directionSweepSpeed);
@@ -111,6 +116,11 @@ public sealed class JumpTuningConfig
     private static AnimationCurve CreateDefaultPowerResponse()
     {
         return AnimationCurve.Linear(0f, 0f, 1f, 1f);
+    }
+
+    private static bool IsFinite(float value)
+    {
+        return !float.IsNaN(value) && !float.IsInfinity(value);
     }
 
     private static WallBounceVerticalVelocityMode NormalizeWallBounceVerticalVelocityMode(

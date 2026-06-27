@@ -18,6 +18,7 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 | UC-002-08 | 벽 충돌 탄성 및 세로 속도 튜닝 | Implemented | [문서](./UC-002-08-tune-wall-bounce-elasticity.md) | 2026-06-22 |
 | UC-002-09 | 디버그 커스텀 점프 실행 | Implemented | [문서](./UC-002-09-run-custom-debug-jump.md) | 2026-06-24 |
 | UC-002-10 | 디버그 점프 위치 히스토리 이동 | Implemented | [문서](./UC-002-10-return-to-previous-jump-position.md) | 2026-06-26 |
+| UC-002-11 | 디버그 피격 판정 표시 | Implemented | [문서](./UC-002-11-show-debug-hitbox.md) | 2026-06-27 |
 | UC-003 | 2D 점프 맵 제작 툴 기능군 | Superseded | [문서](./UC-003-map-authoring-tool.md) | 2026-06-21 |
 | UC-003-01 | Platform 생성 및 크기 조정 | Implemented | [문서](./UC-003-01-create-and-size-platform.md) | 2026-06-21 |
 | UC-003-02 | 기존 오브젝트를 Platform으로 변환 | Implemented | [문서](./UC-003-02-convert-selected-platform.md) | 2026-06-22 |
