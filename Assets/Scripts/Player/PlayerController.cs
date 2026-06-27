@@ -89,7 +89,10 @@ public class PlayerController : MonoBehaviour
     {
         CacheReferences();
         ApplyJumpTuning();
-        RestoreSavedPlayerPosition();
+        if (ShouldUsePersistentPlayerPosition())
+        {
+            RestoreSavedPlayerPosition();
+        }
     }
 
     private void Start()
@@ -436,6 +439,11 @@ public class PlayerController : MonoBehaviour
 
     private void SaveCurrentPlayerPosition()
     {
+        if (!ShouldUsePersistentPlayerPosition())
+        {
+            return;
+        }
+
         Vector2 currentPosition = GetCurrentPosition();
         if (!IsValidSavedPlayerPosition(currentPosition))
         {
@@ -607,6 +615,11 @@ public class PlayerController : MonoBehaviour
     private bool IsDebugModeEnabled()
     {
         return jumpTuning != null && jumpTuning.DebugModeEnabled;
+    }
+
+    private bool ShouldUsePersistentPlayerPosition()
+    {
+        return !IsDebugModeEnabled();
     }
 
     private bool TryGetCustomJumpButtonRect(out Rect buttonRect)
