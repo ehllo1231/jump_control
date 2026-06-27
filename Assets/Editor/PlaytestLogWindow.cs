@@ -7,7 +7,6 @@ using UnityEngine.Rendering;
 
 public sealed class PlaytestLogWindow : EditorWindow
 {
-    private const string SelectedLogPathKey = "JumpTiming.PlaytestLogs.SelectedPath";
     private const float MinimumFallThreshold = -1000f;
     private const float MaximumFallThreshold = 1000f;
 
@@ -27,14 +26,14 @@ public sealed class PlaytestLogWindow : EditorWindow
 
     private void OnEnable()
     {
-        RefreshLogList();
-        string persistedPath = EditorPrefs.GetString(SelectedLogPathKey, string.Empty);
-        if (string.IsNullOrEmpty(persistedPath) || !File.Exists(persistedPath))
-        {
-            persistedPath = logPaths.Length > 0 ? logPaths[0] : string.Empty;
-        }
+        EditorApplication.playModeStateChanged += HandlePlayModeStateChanged;
+        RefreshAndSelectLatestLog();
+    }
 
-        SelectLog(persistedPath);
+    private void OnDisable()
+    {
+        EditorApplication.playModeStateChanged -= HandlePlayModeStateChanged;
+        EditorApplication.delayCall -= RefreshAndSelectLatestLog;
     }
 
     private void OnGUI()
@@ -90,8 +89,7 @@ public sealed class PlaytestLogWindow : EditorWindow
         {
             if (GUILayout.Button("Refresh", GUILayout.Width(80f)))
             {
-                RefreshLogList();
-                SelectLog(File.Exists(selectedLogPath) ? selectedLogPath : (logPaths.Length > 0 ? logPaths[0] : string.Empty));
+                RefreshAndSelectLatestLog();
             }
 
             bool showOverlay = PlaytestLogSceneOverlay.IsVisible;
@@ -184,6 +182,18 @@ public sealed class PlaytestLogWindow : EditorWindow
         }
     }
 
+    private void RefreshAndSelectLatestLog()
+    {
+        RefreshLogList();
+        SelectLog(GetLatestLogPath());
+        Repaint();
+    }
+
+    private string GetLatestLogPath()
+    {
+        return logPaths.Length > 0 ? logPaths[0] : string.Empty;
+    }
+
     private void SelectLog(string path)
     {
         selectedLogPath = path;
@@ -192,12 +202,10 @@ public sealed class PlaytestLogWindow : EditorWindow
 
         if (string.IsNullOrEmpty(path))
         {
-            EditorPrefs.DeleteKey(SelectedLogPathKey);
             PlaytestLogSceneOverlay.SetData(null);
             return;
         }
 
-        EditorPrefs.SetString(SelectedLogPathKey, path);
         if (!PlaytestLogFileReader.TryRead(path, out selectedLog, out loadError))
         {
             PlaytestLogSceneOverlay.SetData(null);
@@ -205,6 +213,17 @@ public sealed class PlaytestLogWindow : EditorWindow
         }
 
         PlaytestLogSceneOverlay.SetData(selectedLog);
+    }
+
+    private void HandlePlayModeStateChanged(PlayModeStateChange state)
+    {
+        if (state != PlayModeStateChange.EnteredEditMode)
+        {
+            return;
+        }
+
+        EditorApplication.delayCall -= RefreshAndSelectLatestLog;
+        EditorApplication.delayCall += RefreshAndSelectLatestLog;
     }
 
     private static int CompareLogPathByRecentWriteTime(string left, string right)
