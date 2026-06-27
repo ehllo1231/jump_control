@@ -1009,6 +1009,7 @@ public class PlayerController : MonoBehaviour
             playerVisual.SetBodySize(
                 playerSize,
                 jumpTuning.PlayerVisualScale,
+                jumpTuning.PlayerVisualXOffset,
                 jumpTuning.PlayerVisualYOffset,
                 jumpTuning.DebugModeEnabled);
         }

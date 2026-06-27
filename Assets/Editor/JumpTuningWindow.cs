@@ -142,10 +142,11 @@ public class JumpTuningWindow : EditorWindow
         EditorGUILayout.LabelField("Player Body", EditorStyles.boldLabel);
         DrawProperty(tuningProperty, "playerSquareSize", "Player Square Size");
         DrawProperty(tuningProperty, "playerVisualScale", "Player Visual Scale");
+        DrawProperty(tuningProperty, "playerVisualXOffset", "Player Visual X Offset");
         DrawProperty(tuningProperty, "playerVisualYOffset", "Player Visual Y Offset");
 
         EditorGUILayout.HelpBox(
-            "Player Visual Scale과 Y Offset은 충돌체 크기와 점프 판정은 유지하고 보이는 Player 스프라이트만 조정합니다. Y Offset 음수는 이미지를 아래로 내립니다.",
+            "Player Visual Scale과 X/Y Offset은 충돌체 크기와 점프 판정은 유지하고 보이는 Player 스프라이트만 조정합니다. X Offset 음수는 왼쪽, Y Offset 음수는 아래로 이동합니다.",
             MessageType.None);
     }
 

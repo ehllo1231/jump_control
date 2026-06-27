@@ -27,6 +27,7 @@ public class PlayerVisual : MonoBehaviour
     [SerializeField] private Color jumpingColor = new Color(1f, 0.42f, 0.3f);
     [SerializeField, HideInInspector] private float configuredBodySize = 0.72f;
     [SerializeField, HideInInspector] private float configuredVisualScale = 1f;
+    [SerializeField, HideInInspector] private float configuredVisualXOffset;
     [SerializeField, HideInInspector] private float configuredVisualYOffset;
     [SerializeField, HideInInspector] private bool debugHitboxVisible;
 
@@ -97,6 +98,7 @@ public class PlayerVisual : MonoBehaviour
     public void SetBodySize(
         float size,
         float visualScale = 1f,
+        float visualXOffset = 0f,
         float visualYOffset = 0f,
         bool showDebugHitbox = false)
     {
@@ -106,6 +108,7 @@ public class PlayerVisual : MonoBehaviour
         float safeVisualScale = Mathf.Max(MinimumVisualScale, visualScale);
         configuredBodySize = safeSize;
         configuredVisualScale = safeVisualScale;
+        configuredVisualXOffset = IsFinite(visualXOffset) ? visualXOffset : 0f;
         configuredVisualYOffset = IsFinite(visualYOffset) ? visualYOffset : 0f;
         debugHitboxVisible = showDebugHitbox;
         if (bodyCollider != null)
@@ -114,7 +117,7 @@ public class PlayerVisual : MonoBehaviour
             bodyCollider.size = Vector2.one * safeSize;
         }
 
-        ApplyVisualTransform(safeSize, safeVisualScale, configuredVisualYOffset);
+        ApplyVisualTransform(safeSize, safeVisualScale, configuredVisualXOffset, configuredVisualYOffset);
         UpdateHitboxOutline();
     }
 
@@ -147,12 +150,16 @@ public class PlayerVisual : MonoBehaviour
         isSyncing = true;
         CacheReferences();
         SyncColliderOffset();
-        ApplyVisualTransform(GetConfiguredBodySize(), GetConfiguredVisualScale(), GetConfiguredVisualYOffset());
+        ApplyVisualTransform(
+            GetConfiguredBodySize(),
+            GetConfiguredVisualScale(),
+            GetConfiguredVisualXOffset(),
+            GetConfiguredVisualYOffset());
         UpdateHitboxOutline();
         isSyncing = false;
     }
 
-    private void ApplyVisualTransform(float bodySize, float visualScale, float visualYOffset)
+    private void ApplyVisualTransform(float bodySize, float visualScale, float visualXOffset, float visualYOffset)
     {
         if (visualRoot == null || visualRoot == transform)
         {
@@ -166,7 +173,7 @@ public class PlayerVisual : MonoBehaviour
         float spriteBottom = GetSpriteLocalBottom() * visualScaleFactor;
         float bodyBottom = -safeBodySize * 0.5f;
         float visualOffsetY = bodyBottom - spriteBottom + visualYOffset;
-        Vector3 targetPosition = new Vector3(0f, visualOffsetY, 0f);
+        Vector3 targetPosition = new Vector3(visualXOffset, visualOffsetY, 0f);
         Vector3 targetScale = new Vector3(visualScaleFactor, visualScaleFactor, 1f);
 
         if ((visualRoot.localPosition - targetPosition).sqrMagnitude > AlignmentTolerance)
@@ -213,6 +220,11 @@ public class PlayerVisual : MonoBehaviour
     private float GetConfiguredVisualScale()
     {
         return Mathf.Max(MinimumVisualScale, configuredVisualScale);
+    }
+
+    private float GetConfiguredVisualXOffset()
+    {
+        return IsFinite(configuredVisualXOffset) ? configuredVisualXOffset : 0f;
     }
 
     private float GetConfiguredVisualYOffset()

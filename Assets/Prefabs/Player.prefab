@@ -308,6 +308,7 @@ MonoBehaviour:
   jumpingColor: {r: 1, g: 0.42, b: 0.3, a: 1}
   configuredBodySize: 0.72
   configuredVisualScale: 1.8
+  configuredVisualXOffset: 0
   configuredVisualYOffset: 0
   debugHitboxVisible: 0
 --- !u!114 &2161290647394816011
