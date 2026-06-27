@@ -16,6 +16,8 @@ public sealed class PlaytestLogViewerWindow : EditorWindow
     private const float FitPadding = 64f;
     private const float TrailLineWidth = 2.5f;
     private const int CircleSegmentCount = 36;
+    private const string ShowJumpMarkersKey = "JumpTiming.PlaytestLogViewer.ShowJumpMarkers";
+    private const string ShowLandingMarkersKey = "JumpTiming.PlaytestLogViewer.ShowLandingMarkers";
 
     private static readonly Color mapBackgroundColor = new Color(0.105f, 0.115f, 0.125f, 1f);
     private static readonly Color mapGridColor = new Color(1f, 1f, 1f, 0.055f);
@@ -54,6 +56,18 @@ public sealed class PlaytestLogViewerWindow : EditorWindow
     private Vector2 scenePlayerPosition;
     private Vector2 logListScroll;
     private string mapStatus = string.Empty;
+
+    private static bool ShowJumpMarkers
+    {
+        get => EditorPrefs.GetBool(ShowJumpMarkersKey, true);
+        set => EditorPrefs.SetBool(ShowJumpMarkersKey, value);
+    }
+
+    private static bool ShowLandingMarkers
+    {
+        get => EditorPrefs.GetBool(ShowLandingMarkersKey, true);
+        set => EditorPrefs.SetBool(ShowLandingMarkersKey, value);
+    }
 
     [MenuItem("Tools/Jump Timing/Log Viewer", false, 33)]
     public static void OpenWindow()
@@ -194,6 +208,8 @@ public sealed class PlaytestLogViewerWindow : EditorWindow
 
         EditorGUILayout.Space(6f);
         EditorGUILayout.LabelField($"Selected: {CountSelectedLogs()} / {logEntries.Count}", EditorStyles.miniLabel);
+        DrawMarkerOptions();
+        EditorGUILayout.Space(4f);
 
         logListScroll = EditorGUILayout.BeginScrollView(logListScroll);
         if (logEntries.Count == 0)
@@ -250,6 +266,28 @@ public sealed class PlaytestLogViewerWindow : EditorWindow
 
         EditorGUI.indentLevel--;
         EditorGUILayout.Space(2f);
+    }
+
+    private void DrawMarkerOptions()
+    {
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            bool showJumpMarkers = ShowJumpMarkers;
+            bool nextShowJumpMarkers = EditorGUILayout.ToggleLeft("Jump Markers", showJumpMarkers, GUILayout.Width(130f));
+            if (nextShowJumpMarkers != showJumpMarkers)
+            {
+                ShowJumpMarkers = nextShowJumpMarkers;
+                Repaint();
+            }
+
+            bool showLandingMarkers = ShowLandingMarkers;
+            bool nextShowLandingMarkers = EditorGUILayout.ToggleLeft("Landing Markers", showLandingMarkers);
+            if (nextShowLandingMarkers != showLandingMarkers)
+            {
+                ShowLandingMarkers = nextShowLandingMarkers;
+                Repaint();
+            }
+        }
     }
 
     private void DrawGrid(Rect rect)
@@ -331,16 +369,22 @@ public sealed class PlaytestLogViewerWindow : EditorWindow
             DrawGuiLine(WorldToGui(segment.Start, rect), WorldToGui(segment.End, rect), TrailLineWidth);
         }
 
-        Handles.color = jumpMarkerColor;
-        for (int i = 0; i < entry.Data.Jumps.Count; i++)
+        if (ShowJumpMarkers)
         {
-            DrawCircleMarker(WorldToGui(entry.Data.Jumps[i].Position, rect), 5f);
+            Handles.color = jumpMarkerColor;
+            for (int i = 0; i < entry.Data.Jumps.Count; i++)
+            {
+                DrawCircleMarker(WorldToGui(entry.Data.Jumps[i].Position, rect), 5f);
+            }
         }
 
-        Handles.color = landingMarkerColor;
-        for (int i = 0; i < entry.Data.Landings.Count; i++)
+        if (ShowLandingMarkers)
         {
-            DrawDiamondMarker(WorldToGui(entry.Data.Landings[i].Position, rect), 6f);
+            Handles.color = landingMarkerColor;
+            for (int i = 0; i < entry.Data.Landings.Count; i++)
+            {
+                DrawDiamondMarker(WorldToGui(entry.Data.Landings[i].Position, rect), 6f);
+            }
         }
 
         Handles.color = fallMarkerColor;

@@ -100,6 +100,23 @@ public sealed class PlaytestLogWindow : EditorWindow
             }
         }
 
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            bool showJumpMarkers = PlaytestLogSceneOverlay.ShowJumpMarkers;
+            bool nextShowJumpMarkers = EditorGUILayout.ToggleLeft("Jump Markers", showJumpMarkers, GUILayout.Width(130f));
+            if (nextShowJumpMarkers != showJumpMarkers)
+            {
+                PlaytestLogSceneOverlay.SetShowJumpMarkers(nextShowJumpMarkers);
+            }
+
+            bool showLandingMarkers = PlaytestLogSceneOverlay.ShowLandingMarkers;
+            bool nextShowLandingMarkers = EditorGUILayout.ToggleLeft("Landing Markers", showLandingMarkers, GUILayout.Width(150f));
+            if (nextShowLandingMarkers != showLandingMarkers)
+            {
+                PlaytestLogSceneOverlay.SetShowLandingMarkers(nextShowLandingMarkers);
+            }
+        }
+
         if (logPaths.Length == 0)
         {
             EditorGUILayout.HelpBox("아직 기록된 플레이테스트 로그가 없습니다. Play Mode에서 테스트하면 로그가 생성됩니다.", MessageType.Info);
@@ -158,7 +175,7 @@ public sealed class PlaytestLogWindow : EditorWindow
         }
 
         EditorGUILayout.HelpBox(
-            "Scene View에서 이동 궤적은 파란 선으로 표시됩니다. 점프는 청록 원, 착륙은 연두 다이아몬드, 낙하는 빨간 X로 표시됩니다.",
+            "Scene View에서 이동 궤적은 파란 선으로 표시됩니다. 표시 옵션이 켜져 있으면 점프는 청록 원, 착륙은 연두 다이아몬드로 표시되고 낙하는 빨간 X로 표시됩니다.",
             MessageType.None);
     }
 
@@ -246,6 +263,8 @@ public sealed class PlaytestLogWindow : EditorWindow
 internal static class PlaytestLogSceneOverlay
 {
     private const string ShowOverlayKey = "JumpTiming.PlaytestLogs.ShowOverlay";
+    private const string ShowJumpMarkersKey = "JumpTiming.PlaytestLogs.ShowJumpMarkers";
+    private const string ShowLandingMarkersKey = "JumpTiming.PlaytestLogs.ShowLandingMarkers";
     private const float TrailLineWidth = 2.5f;
 
     private static readonly Color trailColor = new Color(0.12f, 0.72f, 1f, 0.32f);
@@ -257,6 +276,8 @@ internal static class PlaytestLogSceneOverlay
     private static PlaytestLogData data;
 
     public static bool IsVisible => EditorPrefs.GetBool(ShowOverlayKey, true);
+    public static bool ShowJumpMarkers => EditorPrefs.GetBool(ShowJumpMarkersKey, true);
+    public static bool ShowLandingMarkers => EditorPrefs.GetBool(ShowLandingMarkersKey, true);
 
     static PlaytestLogSceneOverlay()
     {
@@ -267,6 +288,18 @@ internal static class PlaytestLogSceneOverlay
     public static void SetVisible(bool visible)
     {
         EditorPrefs.SetBool(ShowOverlayKey, visible);
+        SceneView.RepaintAll();
+    }
+
+    public static void SetShowJumpMarkers(bool visible)
+    {
+        EditorPrefs.SetBool(ShowJumpMarkersKey, visible);
+        SceneView.RepaintAll();
+    }
+
+    public static void SetShowLandingMarkers(bool visible)
+    {
+        EditorPrefs.SetBool(ShowLandingMarkersKey, visible);
         SceneView.RepaintAll();
     }
 
@@ -313,8 +346,16 @@ internal static class PlaytestLogSceneOverlay
         CompareFunction previousZTest = Handles.zTest;
         Handles.zTest = CompareFunction.Always;
         DrawSegments();
-        DrawJumpMarkers();
-        DrawLandingMarkers();
+        if (ShowJumpMarkers)
+        {
+            DrawJumpMarkers();
+        }
+
+        if (ShowLandingMarkers)
+        {
+            DrawLandingMarkers();
+        }
+
         DrawFallMarkers();
         Handles.zTest = previousZTest;
     }
