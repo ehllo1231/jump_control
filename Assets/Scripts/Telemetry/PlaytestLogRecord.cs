@@ -22,5 +22,6 @@ public static class PlaytestLogRecordTypes
     public const string SessionEnd = "session_end";
     public const string Sample = "sample";
     public const string Jump = "jump";
+    public const string Landing = "landing";
     public const string Fall = "fall";
 }
