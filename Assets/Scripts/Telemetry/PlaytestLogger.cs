@@ -72,6 +72,7 @@ public sealed class PlaytestLogger : MonoBehaviour
         if (player != null)
         {
             player.JumpExecuted += HandleJumpExecuted;
+            player.Landed += HandleLanded;
             player.DebugJumpHistoryMoved += HandleDebugJumpHistoryMoved;
         }
     }
@@ -103,6 +104,7 @@ public sealed class PlaytestLogger : MonoBehaviour
         if (player != null)
         {
             player.JumpExecuted -= HandleJumpExecuted;
+            player.Landed -= HandleLanded;
             player.DebugJumpHistoryMoved -= HandleDebugJumpHistoryMoved;
         }
 
@@ -239,6 +241,31 @@ public sealed class PlaytestLogger : MonoBehaviour
         WriteRecord(new PlaytestLogRecord
         {
             type = PlaytestLogRecordTypes.Jump,
+            time = Time.timeSinceLevelLoad,
+            scene = SceneManager.GetActiveScene().name,
+            timestamp = DateTime.Now.ToString("o"),
+            player = source.name,
+            x = position.x,
+            y = position.y,
+            angle = source.LastJumpAngle,
+            power = source.LockedPower,
+            impulseX = impulse.x,
+            impulseY = impulse.y
+        }, flushImmediately: true);
+    }
+
+    private void HandleLanded(PlayerController source)
+    {
+        if (!sessionOpen || source == null)
+        {
+            return;
+        }
+
+        Vector2 position = GetCurrentPosition();
+        Vector2 impulse = source.LastJumpVector;
+        WriteRecord(new PlaytestLogRecord
+        {
+            type = PlaytestLogRecordTypes.Landing,
             time = Time.timeSinceLevelLoad,
             scene = SceneManager.GetActiveScene().name,
             timestamp = DateTime.Now.ToString("o"),
