@@ -26,10 +26,13 @@ public class PlayerController : MonoBehaviour
 {
     private const float CustomJumpButtonWidth = 112f;
     private const float CustomJumpButtonHeight = 30f;
-    private const float CustomJumpWindowWidth = 220f;
-    private const float CustomJumpWindowHeight = 126f;
+    private const float CustomJumpWindowWidth = 300f;
+    private const float CustomJumpWindowHeight = 360f;
+    private const float CustomJumpPadSize = 168f;
+    private const float CustomJumpPadHandleSize = 12f;
     private const float DebugJumpHistorySamePositionToleranceSqr = 0.000001f;
     private const int CustomJumpWindowId = 240624;
+    private const int CustomJumpPadControlId = 240625;
     private const string SavedPlayerPositionExistsKey = "JumpTiming.PlayerPosition.Exists";
     private const string SavedPlayerPositionXKey = "JumpTiming.PlayerPosition.X";
     private const string SavedPlayerPositionYKey = "JumpTiming.PlayerPosition.Y";
@@ -72,6 +75,8 @@ public class PlayerController : MonoBehaviour
     private string customJumpGaugePercentText = "100";
     private float customJumpAngle;
     private float customJumpGaugeNormalized = 1f;
+    private bool customJumpArmed;
+    private bool customJumpPadDragging;
 
     public PlayerJumpState CurrentState => currentState;
     public float LockedPower => lockedPower;
@@ -171,6 +176,21 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
+        if (customJumpArmed)
+        {
+            if (GUI.Button(buttonRect, "Cancel"))
+            {
+                CancelDebugCustomJump();
+            }
+
+            if (customJumpWindowOpen)
+            {
+                customJumpWindowOpen = false;
+            }
+
+            return;
+        }
+
         bool canStartCustomJump = CanStartDebugCustomJump();
         bool previousEnabled = GUI.enabled;
         GUI.enabled = canStartCustomJump;
@@ -188,6 +208,8 @@ public class PlayerController : MonoBehaviour
                 customJumpWindowRect,
                 DrawCustomJumpWindow,
                 "Custom Jump");
+            customJumpWindowRect.width = CustomJumpWindowWidth;
+            customJumpWindowRect.height = CustomJumpWindowHeight;
             customJumpWindowRect = ClampToScreen(customJumpWindowRect);
         }
     }
@@ -334,7 +356,7 @@ public class PlayerController : MonoBehaviour
     {
         if (!IsDebugModeEnabled())
         {
-            if (customJumpWindowOpen)
+            if (customJumpWindowOpen || customJumpArmed)
             {
                 CancelDebugCustomJump();
             }
@@ -342,15 +364,44 @@ public class PlayerController : MonoBehaviour
             return false;
         }
 
-        if (!customJumpWindowOpen)
+        if ((customJumpWindowOpen || customJumpArmed) && Input.GetKeyDown(KeyCode.D))
+        {
+            CancelDebugCustomJump();
+            return true;
+        }
+
+        if (customJumpWindowOpen)
+        {
+            if (!grounded || currentState != PlayerJumpState.Idle)
+            {
+                CancelDebugCustomJump();
+                return false;
+            }
+
+            RefreshDebugCustomJumpPreview();
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                ArmDebugCustomJump();
+                ExecuteDebugCustomJump();
+            }
+
+            return true;
+        }
+
+        if (!customJumpArmed)
         {
             return false;
         }
 
-        if (!grounded || currentState != PlayerJumpState.Idle)
+        if (currentState != PlayerJumpState.Idle)
         {
-            CancelDebugCustomJump();
             return false;
+        }
+
+        if (!grounded)
+        {
+            CancelPreparationAndWaitForLanding();
+            return true;
         }
 
         RefreshDebugCustomJumpPreview();
@@ -551,6 +602,8 @@ public class PlayerController : MonoBehaviour
         }
 
         customJumpWindowOpen = true;
+        customJumpPadDragging = false;
+        SynchronizeCustomJumpText();
         customJumpWindowRect = ClampToScreen(new Rect(
             buttonRect.x,
             buttonRect.y + buttonRect.height + 4f,
@@ -562,26 +615,167 @@ public class PlayerController : MonoBehaviour
 
     private void DrawCustomJumpWindow(int windowId)
     {
-        GUILayout.Label("Angle");
-        customJumpAngleText = GUILayout.TextField(customJumpAngleText);
-        GUILayout.Label("Gauge %");
-        customJumpGaugePercentText = GUILayout.TextField(customJumpGaugePercentText);
+        GUILayout.Space(6f);
+        GUILayout.BeginHorizontal();
+        GUILayout.FlexibleSpace();
+        Rect padRect = GUILayoutUtility.GetRect(
+            CustomJumpPadSize,
+            CustomJumpPadSize,
+            GUILayout.Width(CustomJumpPadSize),
+            GUILayout.Height(CustomJumpPadSize));
+        GUILayout.FlexibleSpace();
+        GUILayout.EndHorizontal();
+
+        DrawCustomJumpPad(padRect);
+        GUILayout.Space(8f);
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Angle", GUILayout.Width(64f));
+        customJumpAngleText = GUILayout.TextField(customJumpAngleText, GUILayout.Width(74f));
+        GUILayout.Label("deg", GUILayout.Width(32f));
+        GUILayout.FlexibleSpace();
+        GUILayout.EndHorizontal();
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Power", GUILayout.Width(64f));
+        customJumpGaugePercentText = GUILayout.TextField(customJumpGaugePercentText, GUILayout.Width(74f));
+        GUILayout.Label("%", GUILayout.Width(32f));
+        GUILayout.FlexibleSpace();
+        GUILayout.EndHorizontal();
 
         RefreshDebugCustomJumpPreview();
+        GUILayout.Space(8f);
 
-        if (GUILayout.Button("Cancel"))
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Apply", GUILayout.Height(28f)))
+        {
+            ArmDebugCustomJump();
+        }
+
+        if (GUILayout.Button("Cancel", GUILayout.Height(28f)))
         {
             CancelDebugCustomJump();
         }
+        GUILayout.EndHorizontal();
 
         GUI.DragWindow(new Rect(0f, 0f, CustomJumpWindowWidth, 20f));
+    }
+
+    private void DrawCustomJumpPad(Rect padRect)
+    {
+        HandleCustomJumpPadInput(padRect);
+
+        Color previousColor = GUI.color;
+        GUI.color = new Color(0.08f, 0.09f, 0.1f, 0.92f);
+        GUI.Box(padRect, GUIContent.none);
+        GUI.color = previousColor;
+
+        Vector2 center = padRect.center;
+        float radius = GetCustomJumpPadRadius(padRect);
+        DrawGuiLine(center + Vector2.left * radius, center + Vector2.right * radius, 1f, new Color(1f, 1f, 1f, 0.22f));
+        DrawGuiLine(center + Vector2.up * radius, center + Vector2.down * radius, 1f, new Color(1f, 1f, 1f, 0.22f));
+
+        Vector2 handlePosition = GetCustomJumpPadHandlePosition(padRect);
+        DrawGuiLine(center, handlePosition, 3f, new Color(0.2f, 1f, 0.55f, 0.88f));
+
+        Rect handleRect = new Rect(
+            handlePosition.x - CustomJumpPadHandleSize * 0.5f,
+            handlePosition.y - CustomJumpPadHandleSize * 0.5f,
+            CustomJumpPadHandleSize,
+            CustomJumpPadHandleSize);
+        GUI.color = new Color(0.2f, 1f, 0.55f, 1f);
+        GUI.Box(handleRect, GUIContent.none);
+        GUI.color = previousColor;
+    }
+
+    private void HandleCustomJumpPadInput(Rect padRect)
+    {
+        Event current = Event.current;
+        if (current == null)
+        {
+            return;
+        }
+
+        int controlId = GUIUtility.GetControlID(CustomJumpPadControlId, FocusType.Passive, padRect);
+        if (current.type == EventType.MouseDown && current.button == 0 && padRect.Contains(current.mousePosition))
+        {
+            GUIUtility.hotControl = controlId;
+            customJumpPadDragging = true;
+            SetCustomJumpFromPadPosition(current.mousePosition, padRect);
+            current.Use();
+            return;
+        }
+
+        if (current.type == EventType.MouseDrag
+            && current.button == 0
+            && customJumpPadDragging
+            && GUIUtility.hotControl == controlId)
+        {
+            SetCustomJumpFromPadPosition(current.mousePosition, padRect);
+            current.Use();
+            return;
+        }
+
+        if (current.type == EventType.MouseUp
+            && customJumpPadDragging
+            && GUIUtility.hotControl == controlId)
+        {
+            GUIUtility.hotControl = 0;
+            customJumpPadDragging = false;
+            current.Use();
+        }
+    }
+
+    private void SetCustomJumpFromPadPosition(Vector2 mousePosition, Rect padRect)
+    {
+        Vector2 center = padRect.center;
+        Vector2 screenVector = mousePosition - center;
+        Vector2 jumpVector = new Vector2(screenVector.x, -screenVector.y);
+        float radius = GetCustomJumpPadRadius(padRect);
+        float magnitude = Mathf.Clamp(jumpVector.magnitude, 0f, radius);
+        float nextGauge = radius > 0f ? magnitude / radius : 0f;
+        float nextAngle = magnitude > 0.001f
+            ? Mathf.Atan2(jumpVector.x, jumpVector.y) * Mathf.Rad2Deg
+            : 0f;
+
+        customJumpAngle = ClampCustomJumpAngle(nextAngle);
+        customJumpGaugeNormalized = Mathf.Clamp01(nextGauge);
+        SynchronizeCustomJumpText();
+        RefreshDebugCustomJumpPreview();
+    }
+
+    private Vector2 GetCustomJumpPadHandlePosition(Rect padRect)
+    {
+        Vector2 direction = GetDirectionFromAngle(ClampCustomJumpAngle(customJumpAngle));
+        Vector2 screenDirection = new Vector2(direction.x, -direction.y);
+        return padRect.center + screenDirection * GetCustomJumpPadRadius(padRect) * Mathf.Clamp01(customJumpGaugeNormalized);
+    }
+
+    private static float GetCustomJumpPadRadius(Rect padRect)
+    {
+        return Mathf.Max(1f, Mathf.Min(padRect.width, padRect.height) * 0.5f - CustomJumpPadHandleSize);
+    }
+
+    private static void DrawGuiLine(Vector2 start, Vector2 end, float width, Color color)
+    {
+        Matrix4x4 previousMatrix = GUI.matrix;
+        Color previousColor = GUI.color;
+        Vector2 delta = end - start;
+        float angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
+        float length = delta.magnitude;
+
+        GUI.color = color;
+        GUIUtility.RotateAroundPivot(angle, start);
+        GUI.DrawTexture(new Rect(start.x, start.y - width * 0.5f, length, width), Texture2D.whiteTexture);
+        GUI.matrix = previousMatrix;
+        GUI.color = previousColor;
     }
 
     private void RefreshDebugCustomJumpPreview()
     {
         if (TryParseFloat(customJumpAngleText, out float parsedAngle))
         {
-            customJumpAngle = parsedAngle;
+            customJumpAngle = ClampCustomJumpAngle(parsedAngle);
         }
 
         if (TryParseFloat(customJumpGaugePercentText, out float parsedGaugePercent))
@@ -593,19 +787,41 @@ public class PlayerController : MonoBehaviour
         powerGauge.ShowLockedValue(customJumpGaugeNormalized);
     }
 
+    private void ArmDebugCustomJump()
+    {
+        RefreshDebugCustomJumpPreview();
+        SynchronizeCustomJumpText();
+        customJumpWindowOpen = false;
+        customJumpArmed = true;
+        if (customJumpPadDragging)
+        {
+            GUIUtility.hotControl = 0;
+        }
+
+        customJumpPadDragging = false;
+    }
+
     private void ExecuteDebugCustomJump()
     {
-        lockedJumpAngle = customJumpAngle;
-        lockedJumpDirection = GetDirectionFromAngle(customJumpAngle);
+        ArmDebugCustomJump();
+        lockedJumpAngle = ClampCustomJumpAngle(customJumpAngle);
+        lockedJumpDirection = GetDirectionFromAngle(lockedJumpAngle);
         lockedPower = powerGauge.ShowLockedValue(customJumpGaugeNormalized);
 
-        customJumpWindowOpen = false;
         ExecuteJump();
     }
 
     private void CancelDebugCustomJump()
     {
         customJumpWindowOpen = false;
+        customJumpArmed = false;
+        if (customJumpPadDragging)
+        {
+            GUIUtility.hotControl = 0;
+        }
+
+        customJumpPadDragging = false;
+
         angleAim.Hide();
         powerGauge.Hide();
 
@@ -619,9 +835,23 @@ public class PlayerController : MonoBehaviour
     {
         return IsDebugModeEnabled()
             && !customJumpWindowOpen
+            && !customJumpArmed
             && currentState == PlayerJumpState.Idle
             && groundChecker != null
             && groundChecker.CheckGroundedNow();
+    }
+
+    private void SynchronizeCustomJumpText()
+    {
+        customJumpAngleText = ClampCustomJumpAngle(customJumpAngle).ToString("0.##", CultureInfo.InvariantCulture);
+        customJumpGaugePercentText = (Mathf.Clamp01(customJumpGaugeNormalized) * 100f).ToString("0.#", CultureInfo.InvariantCulture);
+    }
+
+    private float ClampCustomJumpAngle(float angle)
+    {
+        return jumpTuning != null
+            ? Mathf.Clamp(angle, jumpTuning.MinDirectionAngle, jumpTuning.MaxDirectionAngle)
+            : angle;
     }
 
     private bool IsDebugModeEnabled()
