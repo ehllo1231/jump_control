@@ -1,11 +1,11 @@
 # UC-002-07: 플레이어 시각 요소와 충돌체 정렬 유지
 
 - 상태: Implemented
-- 마지막 갱신일: 2026-06-21
+- 마지막 갱신일: 2026-06-27
 
 ## 목적
 
-개발자 또는 맵 제작자가 Scene View에서 보이는 Player 사각형을 움직이거나 크기를 맞출 때 Player의 충돌체와 시각 요소가 같은 위치와 크기를 유지한다.
+개발자 또는 맵 제작자가 Player 시각 요소를 사각형 또는 캐릭터 이미지로 교체해도 Player의 충돌체와 점프 판정 기준이 안정적으로 유지된다.
 
 ## 액터
 
@@ -17,6 +17,7 @@
 
 - Player 오브젝트에 `PlayerVisual`, `BoxCollider2D`, `Rigidbody2D`가 있어야 한다.
 - Player 시각 요소가 자식 `Visual` 오브젝트로 존재할 수 있다.
+- 캐릭터 이미지 스프라이트를 사용할 때도 점프 로직과 충돌체는 Player 루트에 남아 있어야 한다.
 
 ## 트리거
 
@@ -24,30 +25,36 @@
 
 ## 기본 흐름
 
-1. 사용자가 Scene View에서 Player의 보이는 사각형 위치를 옮긴다.
+1. 사용자가 Scene View에서 Player의 보이는 시각 요소 위치를 옮긴다.
 2. 시스템은 Player 루트 위치를 옮기는 Scene View 드래그 핸들을 표시한다.
 3. 사용자가 드래그 핸들로 Player 루트 위치를 옮긴다.
 4. 시스템은 시각 요소의 로컬 위치를 원점으로 되돌린다.
 5. 시스템은 Player의 `BoxCollider2D` offset을 원점으로 유지한다.
 6. 시스템은 시각 요소 크기와 `BoxCollider2D.size`를 같은 값으로 유지한다.
+7. 시스템은 캐릭터 이미지 스프라이트를 표시하더라도 원본 색상을 유지할 수 있게 한다.
 
 ## 대안 및 예외 흐름
 
 - 1a. 사용자가 Player 루트 오브젝트를 움직이면 시각 요소와 충돌체는 함께 움직인다.
 - 5a. 튜닝 값으로 Player 크기가 변경되면 시스템은 시각 요소와 충돌체 크기를 같은 값으로 적용한다.
+- 7a. 상태별 색상 틴트가 필요한 임시 사각형 스프라이트를 사용할 경우 시스템은 기존처럼 상태 색상을 적용할 수 있다.
 
 ## 인수 조건
 
-- [ ] Scene View에서 보이는 Player 사각형을 움직여도 충돌체가 이전 위치에 남지 않는다.
+- [ ] Scene View에서 보이는 Player 시각 요소를 움직여도 충돌체가 이전 위치에 남지 않는다.
 - [ ] Scene View에서 Player 드래그 핸들을 끌어 Player 위치를 자유롭게 수정할 수 있다.
 - [ ] Player 시각 요소의 로컬 위치는 원점으로 유지된다.
 - [ ] Player의 `BoxCollider2D.offset`은 원점으로 유지된다.
 - [ ] Player 시각 요소 크기와 `BoxCollider2D.size`는 같은 값으로 유지된다.
 - [ ] 지면 판정은 정렬된 충돌체의 실제 하단과 폭을 기준으로 동작한다.
+- [ ] 캐릭터 이미지 스프라이트를 사용하면 원본 색상이 상태 색상으로 틴트되지 않는다.
 
 ## 구현 메모
 
 - `PlayerVisual`에 `ExecuteAlways`를 적용하여 Edit Mode와 Play Mode 모두에서 정렬을 유지한다.
+- `Assets/IncomingImages/Player/stand/demonking_right.png`를 Player 표시 스프라이트로 사용하도록 `Assets/Prefabs/Player.prefab`을 갱신했다.
+- 마왕 캐릭터 스프라이트는 pixels per unit을 `1254`로 설정해 기존 1유닛 기준 시각 크기와 충돌체 동기화 방식을 유지한다.
+- `PlayerVisual.tintByState` 옵션을 추가했고, Player prefab에서는 이 값을 꺼서 캐릭터 이미지 원본 색상을 유지한다.
 - `PlayerScenePositionHandle`이 Scene View에 Player 루트 Transform을 이동하는 드래그 핸들을 표시한다.
 - `PlayerVisual`은 자식 `Visual`을 기준으로 Player 루트 위치를 계속 이동시키지 않고, `Visual.localPosition`을 원점으로 고정해 Scene View 드래그 중 위치가 증폭되는 문제를 방지한다.
 - `Visual.localRotation`과 `BoxCollider2D.offset`은 원점/기본 회전으로 유지한다.

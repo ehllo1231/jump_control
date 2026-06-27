@@ -112,8 +112,8 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 10
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 21300000, guid: 99759b0d0744c7f4dab2184f598b9d03, type: 3}
-  m_Color: {r: 0.2, g: 0.65, b: 1, a: 1}
+  m_Sprite: {fileID: 21300000, guid: 78eaa225e72f48769693429ea7a0eee7, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -300,6 +300,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerVisual
   visualRoot: {fileID: 7847402139308352658}
   bodyRenderer: {fileID: 8204425009453274186}
+  bodyCollider: {fileID: 5896041135039201122}
+  tintByState: 0
   idleColor: {r: 0.2, g: 0.65, b: 1, a: 1}
   powerReadyColor: {r: 1, g: 0.82, b: 0.25, a: 1}
   aimingColor: {r: 0.15, g: 0.9, b: 0.55, a: 1}

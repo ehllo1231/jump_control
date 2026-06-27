@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// 임시 플레이어 표시와 상태별 색상만 담당합니다.
-/// 추후 캐릭터 스프라이트나 Animator를 붙여도 점프 로직은 PlayerController에 그대로 둘 수 있습니다.
+/// 플레이어 시각 요소와 상태별 표시를 담당합니다.
+/// 캐릭터 스프라이트나 Animator를 붙여도 점프 로직은 PlayerController에 그대로 둘 수 있습니다.
 /// </summary>
 [ExecuteAlways]
 public class PlayerVisual : MonoBehaviour
@@ -16,6 +16,7 @@ public class PlayerVisual : MonoBehaviour
     [SerializeField] private BoxCollider2D bodyCollider;
 
     [Header("State Colors")]
+    [SerializeField] private bool tintByState = true;
     [SerializeField] private Color idleColor = new Color(0.2f, 0.65f, 1f);
     [SerializeField] private Color powerReadyColor = new Color(1f, 0.82f, 0.25f);
     [SerializeField] private Color aimingColor = new Color(0.15f, 0.9f, 0.55f);
@@ -43,6 +44,12 @@ public class PlayerVisual : MonoBehaviour
     {
         if (bodyRenderer == null)
         {
+            return;
+        }
+
+        if (!tintByState)
+        {
+            bodyRenderer.color = Color.white;
             return;
         }
 
