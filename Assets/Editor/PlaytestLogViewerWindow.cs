@@ -651,6 +651,16 @@ public sealed class PlaytestLogViewerWindow : EditorWindow
             return;
         }
 
+        if (isPanning && current.type == EventType.MouseDrag)
+        {
+            Vector2 delta = current.mousePosition - lastMousePosition;
+            viewCenter += new Vector2(-delta.x / zoom, delta.y / zoom);
+            lastMousePosition = current.mousePosition;
+            current.Use();
+            Repaint();
+            return;
+        }
+
         if (isPanning && current.type == EventType.MouseUp)
         {
             isPanning = false;
@@ -674,22 +684,25 @@ public sealed class PlaytestLogViewerWindow : EditorWindow
         }
 
         if (current.type == EventType.MouseDown
-            && (current.button == 2 || (current.button == 0 && current.alt)))
+            && IsMapPanButton(current)
+            && !IsMapToolbarPosition(mapRect, current.mousePosition))
         {
             isPanning = true;
             lastMousePosition = current.mousePosition;
             current.Use();
             return;
         }
+    }
 
-        if (current.type == EventType.MouseDrag && isPanning)
-        {
-            Vector2 delta = current.mousePosition - lastMousePosition;
-            viewCenter += new Vector2(-delta.x / zoom, delta.y / zoom);
-            lastMousePosition = current.mousePosition;
-            current.Use();
-            Repaint();
-        }
+    private static bool IsMapPanButton(Event current)
+    {
+        return current.button == 0 || current.button == 2;
+    }
+
+    private static bool IsMapToolbarPosition(Rect mapRect, Vector2 mousePosition)
+    {
+        Rect toolbarRect = new Rect(mapRect.x + 8f, mapRect.y + 8f, mapRect.width - 16f, ToolbarHeight);
+        return toolbarRect.Contains(mousePosition);
     }
 
     private void SetZoomAt(Rect mapRect, Vector2 localMouse, float nextZoom)
