@@ -80,6 +80,7 @@ public class PlayerController : MonoBehaviour
     public JumpTuningConfig JumpTuning => jumpTuning;
     public event System.Action<PlayerController> JumpExecuted;
     public event System.Action<PlayerController> Landed;
+    public event System.Action<PlayerController> DebugJumpHistoryMoved;
 
     public void ApplyJumpTuningNow()
     {
@@ -538,6 +539,8 @@ public class PlayerController : MonoBehaviour
         {
             CancelPreparationAndWaitForLanding();
         }
+
+        DebugJumpHistoryMoved?.Invoke(this);
     }
 
     private void OpenDebugCustomJumpWindow(Rect buttonRect)

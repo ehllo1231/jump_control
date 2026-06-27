@@ -73,6 +73,7 @@ public sealed class PlaytestLogger : MonoBehaviour
         {
             player.JumpExecuted += HandleJumpExecuted;
             player.Landed += HandleLanded;
+            player.DebugJumpHistoryMoved += HandleDebugJumpHistoryMoved;
         }
     }
 
@@ -104,6 +105,7 @@ public sealed class PlaytestLogger : MonoBehaviour
         {
             player.JumpExecuted -= HandleJumpExecuted;
             player.Landed -= HandleLanded;
+            player.DebugJumpHistoryMoved -= HandleDebugJumpHistoryMoved;
         }
 
         EndSession();
@@ -275,6 +277,18 @@ public sealed class PlaytestLogger : MonoBehaviour
             impulseX = impulse.x,
             impulseY = impulse.y
         }, flushImmediately: true);
+    }
+
+    private void HandleDebugJumpHistoryMoved(PlayerController source)
+    {
+        if (!sessionOpen || source == null)
+        {
+            return;
+        }
+
+        hasLastSamplePosition = false;
+        nextSampleTime = 0f;
+        WritePositionRecord(PlaytestLogRecordTypes.PathBreak, GetCurrentPosition(), flushImmediately: true);
     }
 
     private void WritePositionRecord(string type, Vector2 position, bool flushImmediately = false)

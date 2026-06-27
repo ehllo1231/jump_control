@@ -475,10 +475,15 @@ internal static class PlaytestLogFileReader
             Vector2 position = new Vector2(record.x, record.y);
             if (IsValidPosition(position))
             {
-                data.Samples.Add(position);
-                data.Encapsulate(position);
+                data.AddSample(position);
             }
 
+            return;
+        }
+
+        if (string.Equals(record.type, PlaytestLogRecordTypes.PathBreak, StringComparison.Ordinal))
+        {
+            data.BreakBeforeNextSample();
             return;
         }
 
@@ -532,7 +537,9 @@ internal sealed class PlaytestLogData
     public readonly List<PlaytestLogMarker> Falls = new List<PlaytestLogMarker>();
     public readonly List<PlaytestLogSegment> Segments = new List<PlaytestLogSegment>();
 
+    private readonly HashSet<int> segmentBreakSampleIndexes = new HashSet<int>();
     private Bounds bounds;
+    private bool breakBeforeNextSample;
 
     public string SceneName;
     public bool HasBounds { get; private set; }
@@ -542,6 +549,23 @@ internal sealed class PlaytestLogData
     {
         Path = path;
         SceneName = string.Empty;
+    }
+
+    public void AddSample(Vector2 position)
+    {
+        if (breakBeforeNextSample)
+        {
+            segmentBreakSampleIndexes.Add(Samples.Count);
+            breakBeforeNextSample = false;
+        }
+
+        Samples.Add(position);
+        Encapsulate(position);
+    }
+
+    public void BreakBeforeNextSample()
+    {
+        breakBeforeNextSample = true;
     }
 
     public void Encapsulate(Vector2 position)
@@ -567,6 +591,11 @@ internal sealed class PlaytestLogData
 
         for (int i = 1; i < Samples.Count; i++)
         {
+            if (segmentBreakSampleIndexes.Contains(i))
+            {
+                continue;
+            }
+
             Vector2 start = Samples[i - 1];
             Vector2 end = Samples[i];
             if ((end - start).sqrMagnitude <= 0.000001f)
