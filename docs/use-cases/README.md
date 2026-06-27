@@ -9,7 +9,7 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 | UC-001 | 사용자 점프 | Implemented | [문서](./UC-001-player-jump.md) | 2026-06-27 |
 | UC-002 | 실시간 점프 튜닝 기능군 | Superseded | [문서](./UC-002-live-jump-tuning.md) | 2026-06-24 |
 | UC-002-01 | 점프 튜닝 대상 선택 | Implemented | [문서](./UC-002-01-select-jump-tuning-target.md) | 2026-06-21 |
-| UC-002-02 | 플레이어 크기 튜닝 | Implemented | [문서](./UC-002-02-tune-player-size.md) | 2026-06-21 |
+| UC-002-02 | 플레이어 크기 튜닝 | Implemented | [문서](./UC-002-02-tune-player-size.md) | 2026-06-27 |
 | UC-002-03 | 점프 방향 튜닝 | Implemented | [문서](./UC-002-03-tune-jump-direction.md) | 2026-06-21 |
 | UC-002-04 | 점프 파워 튜닝 | Implemented | [문서](./UC-002-04-tune-jump-power.md) | 2026-06-21 |
 | UC-002-05 | Play Mode 튜닝 값 유지 | Implemented | [문서](./UC-002-05-persist-play-mode-tuning.md) | 2026-06-21 |

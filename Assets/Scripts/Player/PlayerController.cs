@@ -1006,7 +1006,7 @@ public class PlayerController : MonoBehaviour
 
         if (playerVisual != null)
         {
-            playerVisual.SetBodySize(playerSize);
+            playerVisual.SetBodySize(playerSize, jumpTuning.PlayerVisualScale);
         }
 
         if (angleAim != null)

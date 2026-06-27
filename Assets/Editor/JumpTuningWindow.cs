@@ -141,6 +141,11 @@ public class JumpTuningWindow : EditorWindow
     {
         EditorGUILayout.LabelField("Player Body", EditorStyles.boldLabel);
         DrawProperty(tuningProperty, "playerSquareSize", "Player Square Size");
+        DrawProperty(tuningProperty, "playerVisualScale", "Player Visual Scale");
+
+        EditorGUILayout.HelpBox(
+            "Player Visual Scale은 충돌체 크기와 점프 판정은 유지하고 보이는 Player 스프라이트 크기만 조정합니다.",
+            MessageType.None);
     }
 
     private static void DrawCollisionSettings(SerializedProperty tuningProperty)

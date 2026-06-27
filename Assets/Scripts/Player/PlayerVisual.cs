@@ -8,6 +8,7 @@ using UnityEngine;
 public class PlayerVisual : MonoBehaviour
 {
     private const float MinimumBodySize = 0.1f;
+    private const float MinimumVisualScale = 0.1f;
     private const float AlignmentTolerance = 0.000001f;
 
     [Header("References")]
@@ -79,11 +80,12 @@ public class PlayerVisual : MonoBehaviour
         }
     }
 
-    public void SetBodySize(float size)
+    public void SetBodySize(float size, float visualScale = 1f)
     {
         CacheReferences();
 
         float safeSize = Mathf.Max(MinimumBodySize, size);
+        float safeVisualScale = Mathf.Max(MinimumVisualScale, visualScale);
         if (bodyCollider != null)
         {
             bodyCollider.offset = Vector2.zero;
@@ -94,7 +96,8 @@ public class PlayerVisual : MonoBehaviour
         {
             visualRoot.localPosition = Vector3.zero;
             visualRoot.localRotation = Quaternion.identity;
-            visualRoot.localScale = new Vector3(safeSize, safeSize, 1f);
+            float visualSize = safeSize * safeVisualScale;
+            visualRoot.localScale = new Vector3(visualSize, visualSize, 1f);
         }
     }
 
@@ -127,7 +130,7 @@ public class PlayerVisual : MonoBehaviour
         isSyncing = true;
         CacheReferences();
         ResetVisualLocalTransform();
-        SyncColliderToVisual();
+        SyncColliderOffset();
         isSyncing = false;
     }
 
@@ -149,7 +152,7 @@ public class PlayerVisual : MonoBehaviour
         }
     }
 
-    private void SyncColliderToVisual()
+    private void SyncColliderOffset()
     {
         if (bodyCollider == null)
         {
@@ -157,21 +160,6 @@ public class PlayerVisual : MonoBehaviour
         }
 
         bodyCollider.offset = Vector2.zero;
-
-        if (visualRoot == null || visualRoot == transform)
-        {
-            return;
-        }
-
-        Vector3 localScale = visualRoot.localScale;
-        Vector2 visualSize = new Vector2(
-            Mathf.Max(MinimumBodySize, Mathf.Abs(localScale.x)),
-            Mathf.Max(MinimumBodySize, Mathf.Abs(localScale.y)));
-
-        if ((bodyCollider.size - visualSize).sqrMagnitude > AlignmentTolerance)
-        {
-            bodyCollider.size = visualSize;
-        }
     }
 
     private void OnValidate()

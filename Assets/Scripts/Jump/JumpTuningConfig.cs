@@ -18,6 +18,8 @@ public sealed class JumpTuningConfig
 {
     private const float DefaultPlayerSquareSize = 0.72f;
     private const float MinimumPlayerSquareSize = 0.1f;
+    private const float DefaultPlayerVisualScale = 1.8f;
+    private const float MinimumPlayerVisualScale = 0.1f;
     private const float DefaultMinAngle = -62f;
     private const float DefaultMaxAngle = 62f;
     private const float DefaultSweepSpeed = 145f;
@@ -32,6 +34,8 @@ public sealed class JumpTuningConfig
 
     [Header("Player Body")]
     [SerializeField, Min(MinimumPlayerSquareSize)] private float playerSquareSize = DefaultPlayerSquareSize;
+    [Tooltip("충돌체 크기는 유지하고 Player 스프라이트만 키우거나 줄이는 배율입니다.")]
+    [SerializeField, Min(MinimumPlayerVisualScale)] private float playerVisualScale = DefaultPlayerVisualScale;
 
     [Header("Collision")]
     [Tooltip("벽 충돌 시 반대 방향으로 되돌리는 속도 비율입니다. 바닥 착지에는 적용하지 않습니다.")]
@@ -59,6 +63,7 @@ public sealed class JumpTuningConfig
     [SerializeField] private bool debugModeEnabled;
 
     public float PlayerSquareSize => Mathf.Max(MinimumPlayerSquareSize, playerSquareSize);
+    public float PlayerVisualScale => Mathf.Max(MinimumPlayerVisualScale, playerVisualScale);
     public float MinDirectionAngle => Mathf.Min(minDirectionAngle, maxDirectionAngle);
     public float MaxDirectionAngle => Mathf.Max(minDirectionAngle, maxDirectionAngle);
     public float DirectionSweepSpeed => Mathf.Max(0f, directionSweepSpeed);
@@ -83,6 +88,7 @@ public sealed class JumpTuningConfig
     public void Validate()
     {
         playerSquareSize = Mathf.Max(MinimumPlayerSquareSize, playerSquareSize);
+        playerVisualScale = Mathf.Max(MinimumPlayerVisualScale, playerVisualScale);
         wallBounceElasticity = Mathf.Clamp(wallBounceElasticity, 0f, MaximumWallBounceElasticity);
         wallBounceVerticalVelocityMode = NormalizeWallBounceVerticalVelocityMode(wallBounceVerticalVelocityMode);
         directionSweepSpeed = Mathf.Max(0f, directionSweepSpeed);
