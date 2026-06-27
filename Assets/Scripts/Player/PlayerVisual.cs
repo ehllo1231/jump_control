@@ -22,6 +22,8 @@ public class PlayerVisual : MonoBehaviour
     [SerializeField] private Color powerReadyColor = new Color(1f, 0.82f, 0.25f);
     [SerializeField] private Color aimingColor = new Color(0.15f, 0.9f, 0.55f);
     [SerializeField] private Color jumpingColor = new Color(1f, 0.42f, 0.3f);
+    [SerializeField, HideInInspector] private float configuredBodySize = 0.72f;
+    [SerializeField, HideInInspector] private float configuredVisualScale = 1f;
 
     private bool isSyncing;
 
@@ -86,19 +88,15 @@ public class PlayerVisual : MonoBehaviour
 
         float safeSize = Mathf.Max(MinimumBodySize, size);
         float safeVisualScale = Mathf.Max(MinimumVisualScale, visualScale);
+        configuredBodySize = safeSize;
+        configuredVisualScale = safeVisualScale;
         if (bodyCollider != null)
         {
             bodyCollider.offset = Vector2.zero;
             bodyCollider.size = Vector2.one * safeSize;
         }
 
-        if (visualRoot != null)
-        {
-            visualRoot.localPosition = Vector3.zero;
-            visualRoot.localRotation = Quaternion.identity;
-            float visualSize = safeSize * safeVisualScale;
-            visualRoot.localScale = new Vector3(visualSize, visualSize, 1f);
-        }
+        ApplyVisualTransform(safeSize, safeVisualScale);
     }
 
     private void CacheReferences()
@@ -129,26 +127,41 @@ public class PlayerVisual : MonoBehaviour
 
         isSyncing = true;
         CacheReferences();
-        ResetVisualLocalTransform();
         SyncColliderOffset();
+        ApplyVisualTransform(GetConfiguredBodySize(), GetConfiguredVisualScale());
         isSyncing = false;
     }
 
-    private void ResetVisualLocalTransform()
+    private void ApplyVisualTransform(float bodySize, float visualScale)
     {
         if (visualRoot == null || visualRoot == transform)
         {
             return;
         }
 
-        if (visualRoot.localPosition.sqrMagnitude > AlignmentTolerance)
+        float safeBodySize = Mathf.Max(MinimumBodySize, bodySize);
+        float targetVisualHeight = safeBodySize * Mathf.Max(MinimumVisualScale, visualScale);
+        float spriteHeight = GetSpriteLocalHeight();
+        float visualScaleFactor = targetVisualHeight / spriteHeight;
+        float spriteBottom = GetSpriteLocalBottom() * visualScaleFactor;
+        float bodyBottom = -safeBodySize * 0.5f;
+        float visualOffsetY = bodyBottom - spriteBottom;
+        Vector3 targetPosition = new Vector3(0f, visualOffsetY, 0f);
+        Vector3 targetScale = new Vector3(visualScaleFactor, visualScaleFactor, 1f);
+
+        if ((visualRoot.localPosition - targetPosition).sqrMagnitude > AlignmentTolerance)
         {
-            visualRoot.localPosition = Vector3.zero;
+            visualRoot.localPosition = targetPosition;
         }
 
         if (visualRoot.localRotation != Quaternion.identity)
         {
             visualRoot.localRotation = Quaternion.identity;
+        }
+
+        if ((visualRoot.localScale - targetScale).sqrMagnitude > AlignmentTolerance)
+        {
+            visualRoot.localScale = targetScale;
         }
     }
 
@@ -160,6 +173,46 @@ public class PlayerVisual : MonoBehaviour
         }
 
         bodyCollider.offset = Vector2.zero;
+    }
+
+    private float GetConfiguredBodySize()
+    {
+        if (configuredBodySize >= MinimumBodySize)
+        {
+            return configuredBodySize;
+        }
+
+        if (bodyCollider == null)
+        {
+            return MinimumBodySize;
+        }
+
+        return Mathf.Max(MinimumBodySize, Mathf.Max(bodyCollider.size.x, bodyCollider.size.y));
+    }
+
+    private float GetConfiguredVisualScale()
+    {
+        return Mathf.Max(MinimumVisualScale, configuredVisualScale);
+    }
+
+    private float GetSpriteLocalHeight()
+    {
+        if (bodyRenderer == null || bodyRenderer.sprite == null)
+        {
+            return 1f;
+        }
+
+        return Mathf.Max(0.0001f, bodyRenderer.sprite.bounds.size.y);
+    }
+
+    private float GetSpriteLocalBottom()
+    {
+        if (bodyRenderer == null || bodyRenderer.sprite == null)
+        {
+            return -0.5f;
+        }
+
+        return bodyRenderer.sprite.bounds.min.y;
     }
 
     private void OnValidate()

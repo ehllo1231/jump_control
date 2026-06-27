@@ -57,7 +57,7 @@ Transform:
   m_GameObject: {fileID: 1999090603797135538}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0.288, z: 0}
   m_LocalScale: {x: 1.296, y: 1.296, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -306,6 +306,8 @@ MonoBehaviour:
   powerReadyColor: {r: 1, g: 0.82, b: 0.25, a: 1}
   aimingColor: {r: 0.15, g: 0.9, b: 0.55, a: 1}
   jumpingColor: {r: 1, g: 0.42, b: 0.3, a: 1}
+  configuredBodySize: 0.72
+  configuredVisualScale: 1.8
 --- !u!114 &2161290647394816011
 MonoBehaviour:
   m_ObjectHideFlags: 0
