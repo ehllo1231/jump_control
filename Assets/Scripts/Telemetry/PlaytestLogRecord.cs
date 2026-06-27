@@ -23,6 +23,5 @@ public static class PlaytestLogRecordTypes
     public const string Sample = "sample";
     public const string PathBreak = "path_break";
     public const string Jump = "jump";
-    public const string Landing = "landing";
     public const string Fall = "fall";
 }

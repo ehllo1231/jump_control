@@ -25,7 +25,6 @@ public sealed class PlaytestLogViewerWindow : EditorWindow
     private static readonly Color playerFillColor = new Color(1f, 1f, 1f, 0.9f);
     private static readonly Color playerLineColor = new Color(0.08f, 0.09f, 0.1f, 1f);
     private static readonly Color jumpMarkerColor = new Color(0.1f, 1f, 0.78f, 0.95f);
-    private static readonly Color landingMarkerColor = new Color(0.62f, 1f, 0.18f, 0.95f);
     private static readonly Color fallMarkerColor = new Color(1f, 0.18f, 0.16f, 0.98f);
 
     private static readonly Color[] logPalette =
@@ -244,7 +243,7 @@ public sealed class PlaytestLogViewerWindow : EditorWindow
         else if (entry.Data != null)
         {
             EditorGUILayout.LabelField(
-                $"Samples {entry.Data.Samples.Count}  Jumps {entry.Data.Jumps.Count}  Landings {entry.Data.Landings.Count}  Falls {entry.Data.Falls.Count}",
+                $"Samples {entry.Data.Samples.Count}  Jumps {entry.Data.Jumps.Count}  Falls {entry.Data.Falls.Count}",
                 EditorStyles.miniLabel);
         }
 
@@ -337,12 +336,6 @@ public sealed class PlaytestLogViewerWindow : EditorWindow
             DrawCircleMarker(WorldToGui(entry.Data.Jumps[i].Position, rect), 5f);
         }
 
-        Handles.color = landingMarkerColor;
-        for (int i = 0; i < entry.Data.Landings.Count; i++)
-        {
-            DrawDiamondMarker(WorldToGui(entry.Data.Landings[i].Position, rect), 6f);
-        }
-
         Handles.color = fallMarkerColor;
         for (int i = 0; i < entry.Data.Falls.Count; i++)
         {
@@ -383,28 +376,6 @@ public sealed class PlaytestLogViewerWindow : EditorWindow
     private void DrawCircleMarker(Vector2 center, float radius)
     {
         Handles.DrawSolidDisc(new Vector3(center.x, center.y, 0f), Vector3.forward, radius);
-    }
-
-    private void DrawDiamondMarker(Vector2 center, float radius)
-    {
-        Vector3[] fillPoints =
-        {
-            new Vector3(center.x, center.y - radius, 0f),
-            new Vector3(center.x + radius, center.y, 0f),
-            new Vector3(center.x, center.y + radius, 0f),
-            new Vector3(center.x - radius, center.y, 0f)
-        };
-        Vector3[] outlinePoints =
-        {
-            fillPoints[0],
-            fillPoints[1],
-            fillPoints[2],
-            fillPoints[3],
-            fillPoints[0]
-        };
-
-        Handles.DrawAAConvexPolygon(fillPoints);
-        Handles.DrawAAPolyLine(2f, outlinePoints);
     }
 
     private void DrawFallMarker(Vector2 center, float radius)

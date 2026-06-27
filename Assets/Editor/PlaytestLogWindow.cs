@@ -137,7 +137,6 @@ public sealed class PlaytestLogWindow : EditorWindow
             EditorGUILayout.TextField("Scene", selectedLog.SceneName);
             EditorGUILayout.IntField("Movement Samples", selectedLog.Samples.Count);
             EditorGUILayout.IntField("Jump Events", selectedLog.Jumps.Count);
-            EditorGUILayout.IntField("Landing Events", selectedLog.Landings.Count);
             EditorGUILayout.IntField("Fall Events", selectedLog.Falls.Count);
         }
 
@@ -158,7 +157,7 @@ public sealed class PlaytestLogWindow : EditorWindow
         }
 
         EditorGUILayout.HelpBox(
-            "Scene View에서 이동 궤적은 파란 선으로 표시됩니다. 점프는 청록 원, 착륙은 연두 다이아몬드, 낙하는 빨간 X로 표시됩니다.",
+            "Scene View에서 이동 궤적은 파란 선으로 표시됩니다. 점프는 청록 원, 낙하는 빨간 X로 표시됩니다.",
             MessageType.None);
     }
 
@@ -250,7 +249,6 @@ internal static class PlaytestLogSceneOverlay
 
     private static readonly Color trailColor = new Color(0.12f, 0.72f, 1f, 0.32f);
     private static readonly Color jumpColor = new Color(0.1f, 1f, 0.78f, 0.95f);
-    private static readonly Color landingColor = new Color(0.62f, 1f, 0.18f, 0.95f);
     private static readonly Color fallColor = new Color(1f, 0.18f, 0.16f, 0.98f);
     private static readonly Vector3[] lineBuffer = new Vector3[2];
 
@@ -314,7 +312,6 @@ internal static class PlaytestLogSceneOverlay
         Handles.zTest = CompareFunction.Always;
         DrawSegments();
         DrawJumpMarkers();
-        DrawLandingMarkers();
         DrawFallMarkers();
         Handles.zTest = previousZTest;
     }
@@ -342,34 +339,6 @@ internal static class PlaytestLogSceneOverlay
             lineBuffer[0] = position;
             lineBuffer[1] = position + Vector3.up * radius * 1.8f;
             Handles.DrawAAPolyLine(3f, lineBuffer);
-        }
-    }
-
-    private static void DrawLandingMarkers()
-    {
-        Handles.color = landingColor;
-        for (int i = 0; i < data.Landings.Count; i++)
-        {
-            Vector3 position = ToWorld(data.Landings[i].Position);
-            float radius = GetMarkerRadius(position) * 1.1f;
-            Vector3[] fillPoints =
-            {
-                position + Vector3.up * radius,
-                position + Vector3.right * radius,
-                position + Vector3.down * radius,
-                position + Vector3.left * radius
-            };
-            Vector3[] outlinePoints =
-            {
-                fillPoints[0],
-                fillPoints[1],
-                fillPoints[2],
-                fillPoints[3],
-                fillPoints[0]
-            };
-
-            Handles.DrawAAConvexPolygon(fillPoints);
-            Handles.DrawAAPolyLine(3f, outlinePoints);
         }
     }
 
@@ -493,12 +462,6 @@ internal static class PlaytestLogFileReader
             return;
         }
 
-        if (string.Equals(record.type, PlaytestLogRecordTypes.Landing, StringComparison.Ordinal))
-        {
-            AddMarker(data.Landings, data, record);
-            return;
-        }
-
         if (string.Equals(record.type, PlaytestLogRecordTypes.Fall, StringComparison.Ordinal))
         {
             AddMarker(data.Falls, data, record);
@@ -533,7 +496,6 @@ internal sealed class PlaytestLogData
     public readonly string Path;
     public readonly List<Vector2> Samples = new List<Vector2>();
     public readonly List<PlaytestLogMarker> Jumps = new List<PlaytestLogMarker>();
-    public readonly List<PlaytestLogMarker> Landings = new List<PlaytestLogMarker>();
     public readonly List<PlaytestLogMarker> Falls = new List<PlaytestLogMarker>();
     public readonly List<PlaytestLogSegment> Segments = new List<PlaytestLogSegment>();
 

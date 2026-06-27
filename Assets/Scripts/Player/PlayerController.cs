@@ -66,7 +66,6 @@ public class PlayerController : MonoBehaviour
     private readonly List<Vector2> debugJumpPositionHistory = new List<Vector2>();
     private float jumpStartedAt;
     private bool hasLeftGround;
-    private bool currentJumpWasExecuted;
     private int debugJumpHistoryCursor = -1;
     private bool debugHistoryCurrentPositionCaptured;
     private bool customJumpWindowOpen;
@@ -84,7 +83,6 @@ public class PlayerController : MonoBehaviour
     public Vector2 LastJumpVector => lastJumpVector;
     public JumpTuningConfig JumpTuning => jumpTuning;
     public event System.Action<PlayerController> JumpExecuted;
-    public event System.Action<PlayerController> Landed;
     public event System.Action<PlayerController> DebugJumpHistoryMoved;
 
     public void ApplyJumpTuningNow()
@@ -220,7 +218,6 @@ public class PlayerController : MonoBehaviour
         {
             currentState = PlayerJumpState.Jumping;
             hasLeftGround = true;
-            currentJumpWasExecuted = false;
             playerVisual.SetState(currentState);
             return;
         }
@@ -300,11 +297,6 @@ public class PlayerController : MonoBehaviour
         bool slowEnoughToLand = jumpMotor.VerticalVelocity <= landingVerticalSpeedThreshold;
         if (grounded && slowEnoughToLand)
         {
-            if (currentJumpWasExecuted)
-            {
-                Landed?.Invoke(this);
-            }
-
             EnterIdle();
         }
     }
@@ -345,7 +337,6 @@ public class PlayerController : MonoBehaviour
         currentState = PlayerJumpState.Jumping;
         jumpStartedAt = Time.time;
         hasLeftGround = false;
-        currentJumpWasExecuted = true;
 
         playerVisual.OnJump(direction);
         playerVisual.SetState(currentState);
@@ -922,7 +913,6 @@ public class PlayerController : MonoBehaviour
 
         currentState = PlayerJumpState.Jumping;
         hasLeftGround = true;
-        currentJumpWasExecuted = false;
         playerVisual.SetState(currentState);
     }
 
@@ -933,7 +923,6 @@ public class PlayerController : MonoBehaviour
         lockedJumpAngle = 0f;
         lockedJumpDirection = Vector2.up;
         hasLeftGround = false;
-        currentJumpWasExecuted = false;
 
         powerGauge.Hide();
         angleAim.Hide();
