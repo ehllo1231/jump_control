@@ -64,7 +64,7 @@
 
 - `PlayerVisual`에 `ExecuteAlways`를 적용하여 Edit Mode와 Play Mode 모두에서 정렬을 유지한다.
 - `Assets/IncomingImages/Player/stand/demonking_right.png`를 Player 표시 스프라이트로 사용하도록 `Assets/Prefabs/Player.prefab`을 갱신했다.
-- 마왕 캐릭터 스프라이트의 약한 알파 여백을 잘라 `800x1103` 이미지로 정리하고, pixels per unit을 `1103`으로 설정해 세로 기준 1유닛 스프라이트로 사용한다.
+- 마왕 캐릭터 스프라이트는 현재 `842x1122` PNG를 사용하며, pixels per unit을 `1122`로 설정해 세로 기준 1유닛 스프라이트로 사용한다.
 - `PlayerVisual.tintByState` 옵션을 추가했고, Player prefab에서는 이 값을 꺼서 캐릭터 이미지 원본 색상을 유지한다.
 - `PlayerScenePositionHandle`이 Scene View에 Player 루트 Transform을 이동하는 드래그 핸들을 표시한다.
 - `PlayerVisual`은 자식 `Visual`을 기준으로 Player 루트 위치를 계속 이동시키지 않고, `Visual.localPosition`을 현재 크기, 오프셋, 방향에 맞는 값으로 직접 계산해 Scene View 드래그 중 위치가 증폭되는 문제를 방지한다.
