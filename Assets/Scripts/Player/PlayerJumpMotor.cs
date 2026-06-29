@@ -55,11 +55,7 @@ public class PlayerJumpMotor : MonoBehaviour
 
     private void Awake()
     {
-        if (body == null)
-        {
-            body = GetComponent<Rigidbody2D>();
-        }
-
+        CacheBodyReference();
         CacheVelocityBeforePhysicsStep();
     }
 
@@ -70,10 +66,7 @@ public class PlayerJumpMotor : MonoBehaviour
 
     public Vector2 Jump(float power, Vector2 direction)
     {
-        if (body == null)
-        {
-            body = GetComponent<Rigidbody2D>();
-        }
+        CacheBodyReference();
 
         Vector2 normalizedDirection = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector2.up;
 
@@ -122,12 +115,19 @@ public class PlayerJumpMotor : MonoBehaviour
             return;
         }
 
-        if (body == null)
+        CacheBodyReference();
+
+        if (!TryGetWallNormal(collision, out Vector2 wallNormal))
         {
-            body = GetComponent<Rigidbody2D>();
+            return;
         }
 
-        Vector2 wallNormal = Vector2.zero;
+        ApplyWallBounceVelocity(collision, wallNormal, elasticity);
+    }
+
+    private bool TryGetWallNormal(Collision2D collision, out Vector2 wallNormal)
+    {
+        wallNormal = Vector2.zero;
         for (int i = 0; i < collision.contactCount; i++)
         {
             Vector2 normal = collision.GetContact(i).normal;
@@ -137,11 +137,11 @@ public class PlayerJumpMotor : MonoBehaviour
             }
         }
 
-        if (wallNormal == Vector2.zero)
-        {
-            return;
-        }
+        return wallNormal != Vector2.zero;
+    }
 
+    private void ApplyWallBounceVelocity(Collision2D collision, Vector2 wallNormal, float elasticity)
+    {
         float wallDirection = Mathf.Sign(wallNormal.x);
         Vector2 currentVelocity = body.linearVelocity;
         float relativeImpactSpeed = Mathf.Abs(collision.relativeVelocity.x);
@@ -178,10 +178,7 @@ public class PlayerJumpMotor : MonoBehaviour
 
     private void CacheVelocityBeforePhysicsStep()
     {
-        if (body == null)
-        {
-            body = GetComponent<Rigidbody2D>();
-        }
+        CacheBodyReference();
 
         if (body != null)
         {
@@ -210,6 +207,11 @@ public class PlayerJumpMotor : MonoBehaviour
         wallBounceCooldown = Mathf.Max(0f, wallBounceCooldown);
         wallBounceSeparationDistance = Mathf.Max(0f, wallBounceSeparationDistance);
 
+        CacheBodyReference();
+    }
+
+    private void CacheBodyReference()
+    {
         if (body == null)
         {
             body = GetComponent<Rigidbody2D>();
