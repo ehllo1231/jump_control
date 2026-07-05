@@ -169,6 +169,12 @@ public class JumpTuningWindow : EditorWindow
         DrawProperty(tuningProperty, "maxDirectionAngle", "Maximum Angle");
         DrawProperty(tuningProperty, "directionSweepSpeed", "Sweep Speed (Degrees/Second)");
         DrawProperty(tuningProperty, "directionStartNormalized", "Start Position (0-1)");
+        DrawProperty(tuningProperty, "aimArrowXOffset", "Arrow X Offset");
+        DrawProperty(tuningProperty, "aimArrowYOffset", "Arrow Y Offset");
+
+        EditorGUILayout.HelpBox(
+            "Arrow X/Y Offset은 Player 기준 로컬 좌표입니다. X 음수는 왼쪽, Y 음수는 아래로 이동합니다.",
+            MessageType.None);
     }
 
     private static void DrawPowerGaugeSettings(SerializedProperty tuningProperty)

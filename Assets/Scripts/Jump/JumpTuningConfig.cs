@@ -25,6 +25,8 @@ public sealed class JumpTuningConfig
     private const float DefaultMinAngle = -62f;
     private const float DefaultMaxAngle = 62f;
     private const float DefaultSweepSpeed = 145f;
+    private const float DefaultAimArrowXOffset = 0f;
+    private const float DefaultAimArrowYOffset = 0.86f;
     private const float DefaultChargeDuration = 1.15f;
     private const float MinimumChargeDuration = 0.05f;
     private const float DefaultMinimumJumpPower = 7f;
@@ -54,6 +56,10 @@ public sealed class JumpTuningConfig
     [SerializeField] private float maxDirectionAngle = DefaultMaxAngle;
     [SerializeField, Min(0f)] private float directionSweepSpeed = DefaultSweepSpeed;
     [SerializeField, Range(0f, 1f)] private float directionStartNormalized = 0.5f;
+    [Tooltip("점프 방향 화살표를 Player 기준 X축으로 이동하는 로컬 오프셋입니다.")]
+    [SerializeField] private float aimArrowXOffset = DefaultAimArrowXOffset;
+    [Tooltip("점프 방향 화살표를 Player 기준 Y축으로 이동하는 로컬 오프셋입니다.")]
+    [SerializeField] private float aimArrowYOffset = DefaultAimArrowYOffset;
 
     [Header("Power Gauge")]
     [Tooltip("게이지가 최소에서 최대까지 도달하는 데 걸리는 시간(초)")]
@@ -76,6 +82,9 @@ public sealed class JumpTuningConfig
     public float MaxDirectionAngle => Mathf.Max(minDirectionAngle, maxDirectionAngle);
     public float DirectionSweepSpeed => Mathf.Max(0f, directionSweepSpeed);
     public float DirectionStartNormalized => Mathf.Clamp01(directionStartNormalized);
+    public Vector2 AimArrowLocalOffset => new Vector2(
+        IsFinite(aimArrowXOffset) ? aimArrowXOffset : DefaultAimArrowXOffset,
+        IsFinite(aimArrowYOffset) ? aimArrowYOffset : DefaultAimArrowYOffset);
     public float GaugeChargeDuration => Mathf.Max(MinimumChargeDuration, gaugeChargeDuration);
     public float MinimumJumpPower => Mathf.Min(minimumJumpPower, maximumJumpPower);
     public float MaximumJumpPower => Mathf.Max(minimumJumpPower, maximumJumpPower);
@@ -103,6 +112,8 @@ public sealed class JumpTuningConfig
         wallBounceVerticalVelocityMode = NormalizeWallBounceVerticalVelocityMode(wallBounceVerticalVelocityMode);
         directionSweepSpeed = Mathf.Max(0f, directionSweepSpeed);
         directionStartNormalized = Mathf.Clamp01(directionStartNormalized);
+        aimArrowXOffset = IsFinite(aimArrowXOffset) ? aimArrowXOffset : DefaultAimArrowXOffset;
+        aimArrowYOffset = IsFinite(aimArrowYOffset) ? aimArrowYOffset : DefaultAimArrowYOffset;
         gaugeChargeDuration = Mathf.Max(MinimumChargeDuration, gaugeChargeDuration);
         minimumJumpPower = Mathf.Max(0f, minimumJumpPower);
         maximumJumpPower = Mathf.Max(0f, maximumJumpPower);

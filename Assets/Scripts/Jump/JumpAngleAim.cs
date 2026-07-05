@@ -126,6 +126,11 @@ public class JumpAngleAim : MonoBehaviour
         return tuningConfig != null ? tuningConfig.DirectionStartNormalized : DefaultStartNormalized;
     }
 
+    private Vector2 GetLocalOffset()
+    {
+        return tuningConfig != null ? tuningConfig.AimArrowLocalOffset : localOffset;
+    }
+
     private void EnsureVisuals()
     {
         if (arrowSprite == null)
@@ -180,7 +185,7 @@ public class JumpAngleAim : MonoBehaviour
             return;
         }
 
-        visualRoot.localPosition = localOffset;
+        visualRoot.localPosition = GetLocalOffset();
         visualRoot.localRotation = Quaternion.Euler(0f, 0f, -currentAngle);
         visualRoot.localScale = Vector3.one;
 
