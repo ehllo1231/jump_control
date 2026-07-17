@@ -36,6 +36,8 @@ public class PlayerVisual : MonoBehaviour
     private bool isSyncing;
     private bool facingLeft;
 
+    public bool IsFacingLeft => facingLeft;
+
     private void Awake()
     {
         CacheReferences();

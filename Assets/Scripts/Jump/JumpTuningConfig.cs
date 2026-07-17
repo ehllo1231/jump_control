@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 public enum WallBounceVerticalVelocityMode
 {
@@ -56,10 +57,14 @@ public sealed class JumpTuningConfig
     [SerializeField] private float maxDirectionAngle = DefaultMaxAngle;
     [SerializeField, Min(0f)] private float directionSweepSpeed = DefaultSweepSpeed;
     [SerializeField, Range(0f, 1f)] private float directionStartNormalized = 0.5f;
-    [Tooltip("점프 방향 화살표를 Player 기준 X축으로 이동하는 로컬 오프셋입니다.")]
-    [SerializeField] private float aimArrowXOffset = DefaultAimArrowXOffset;
+    [Tooltip("Player가 오른쪽을 볼 때 점프 방향 화살표를 X축으로 이동하는 로컬 오프셋입니다.")]
+    [FormerlySerializedAs("aimArrowXOffset")]
+    [SerializeField] private float aimArrowFacingRightXOffset = DefaultAimArrowXOffset;
+    [Tooltip("Player가 왼쪽을 볼 때 점프 방향 화살표를 X축으로 이동하는 로컬 오프셋입니다.")]
+    [SerializeField] private float aimArrowFacingLeftXOffset = DefaultAimArrowXOffset;
     [Tooltip("점프 방향 화살표를 Player 기준 Y축으로 이동하는 로컬 오프셋입니다.")]
     [SerializeField] private float aimArrowYOffset = DefaultAimArrowYOffset;
+    [SerializeField, HideInInspector] private bool directionalAimArrowXOffsetsInitialized;
 
     [Header("Power Gauge")]
     [Tooltip("게이지가 최소에서 최대까지 도달하는 데 걸리는 시간(초)")]
@@ -82,9 +87,30 @@ public sealed class JumpTuningConfig
     public float MaxDirectionAngle => Mathf.Max(minDirectionAngle, maxDirectionAngle);
     public float DirectionSweepSpeed => Mathf.Max(0f, directionSweepSpeed);
     public float DirectionStartNormalized => Mathf.Clamp01(directionStartNormalized);
-    public Vector2 AimArrowLocalOffset => new Vector2(
-        IsFinite(aimArrowXOffset) ? aimArrowXOffset : DefaultAimArrowXOffset,
-        IsFinite(aimArrowYOffset) ? aimArrowYOffset : DefaultAimArrowYOffset);
+    public float AimArrowFacingRightXOffset
+    {
+        get
+        {
+            EnsureDirectionalAimArrowXOffsets();
+            return IsFinite(aimArrowFacingRightXOffset)
+                ? aimArrowFacingRightXOffset
+                : DefaultAimArrowXOffset;
+        }
+    }
+
+    public float AimArrowFacingLeftXOffset
+    {
+        get
+        {
+            EnsureDirectionalAimArrowXOffsets();
+            return IsFinite(aimArrowFacingLeftXOffset)
+                ? aimArrowFacingLeftXOffset
+                : DefaultAimArrowXOffset;
+        }
+    }
+
+    public float AimArrowYOffset => IsFinite(aimArrowYOffset) ? aimArrowYOffset : DefaultAimArrowYOffset;
+    public Vector2 AimArrowLocalOffset => GetAimArrowLocalOffset(false);
     public float GaugeChargeDuration => Mathf.Max(MinimumChargeDuration, gaugeChargeDuration);
     public float MinimumJumpPower => Mathf.Min(minimumJumpPower, maximumJumpPower);
     public float MaximumJumpPower => Mathf.Max(minimumJumpPower, maximumJumpPower);
@@ -92,6 +118,12 @@ public sealed class JumpTuningConfig
     public WallBounceVerticalVelocityMode WallBounceVerticalVelocityMode =>
         NormalizeWallBounceVerticalVelocityMode(wallBounceVerticalVelocityMode);
     public bool DebugModeEnabled => debugModeEnabled;
+
+    public Vector2 GetAimArrowLocalOffset(bool facingLeft)
+    {
+        float xOffset = facingLeft ? AimArrowFacingLeftXOffset : AimArrowFacingRightXOffset;
+        return new Vector2(xOffset, AimArrowYOffset);
+    }
 
     public float EvaluateJumpPower(float normalizedGaugeValue)
     {
@@ -112,7 +144,13 @@ public sealed class JumpTuningConfig
         wallBounceVerticalVelocityMode = NormalizeWallBounceVerticalVelocityMode(wallBounceVerticalVelocityMode);
         directionSweepSpeed = Mathf.Max(0f, directionSweepSpeed);
         directionStartNormalized = Mathf.Clamp01(directionStartNormalized);
-        aimArrowXOffset = IsFinite(aimArrowXOffset) ? aimArrowXOffset : DefaultAimArrowXOffset;
+        EnsureDirectionalAimArrowXOffsets();
+        aimArrowFacingRightXOffset = IsFinite(aimArrowFacingRightXOffset)
+            ? aimArrowFacingRightXOffset
+            : DefaultAimArrowXOffset;
+        aimArrowFacingLeftXOffset = IsFinite(aimArrowFacingLeftXOffset)
+            ? aimArrowFacingLeftXOffset
+            : DefaultAimArrowXOffset;
         aimArrowYOffset = IsFinite(aimArrowYOffset) ? aimArrowYOffset : DefaultAimArrowYOffset;
         gaugeChargeDuration = Mathf.Max(MinimumChargeDuration, gaugeChargeDuration);
         minimumJumpPower = Mathf.Max(0f, minimumJumpPower);
@@ -127,6 +165,21 @@ public sealed class JumpTuningConfig
     private bool HasUsablePowerResponse()
     {
         return gaugePowerResponse != null && gaugePowerResponse.length > 0;
+    }
+
+    private void EnsureDirectionalAimArrowXOffsets()
+    {
+        if (directionalAimArrowXOffsetsInitialized)
+        {
+            return;
+        }
+
+        float legacyXOffset = IsFinite(aimArrowFacingRightXOffset)
+            ? aimArrowFacingRightXOffset
+            : DefaultAimArrowXOffset;
+        aimArrowFacingRightXOffset = legacyXOffset;
+        aimArrowFacingLeftXOffset = legacyXOffset;
+        directionalAimArrowXOffsetsInitialized = true;
     }
 
     private static AnimationCurve CreateDefaultPowerResponse()

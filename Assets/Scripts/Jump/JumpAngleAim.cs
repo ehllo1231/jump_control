@@ -27,6 +27,7 @@ public class JumpAngleAim : MonoBehaviour
     private SpriteRenderer headLeftRenderer;
     private SpriteRenderer headRightRenderer;
     private JumpTuningConfig tuningConfig;
+    private PlayerVisual playerVisual;
     private float normalizedPosition;
     private int sweepDirection = 1;
 
@@ -50,6 +51,7 @@ public class JumpAngleAim : MonoBehaviour
 
     private void Awake()
     {
+        CachePlayerVisual();
         EnsureVisuals();
         Hide();
     }
@@ -128,7 +130,23 @@ public class JumpAngleAim : MonoBehaviour
 
     private Vector2 GetLocalOffset()
     {
-        return tuningConfig != null ? tuningConfig.AimArrowLocalOffset : localOffset;
+        return tuningConfig != null
+            ? tuningConfig.GetAimArrowLocalOffset(IsPlayerFacingLeft())
+            : localOffset;
+    }
+
+    private bool IsPlayerFacingLeft()
+    {
+        CachePlayerVisual();
+        return playerVisual != null && playerVisual.IsFacingLeft;
+    }
+
+    private void CachePlayerVisual()
+    {
+        if (playerVisual == null)
+        {
+            playerVisual = GetComponent<PlayerVisual>();
+        }
     }
 
     private void EnsureVisuals()

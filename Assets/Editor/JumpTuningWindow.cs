@@ -169,11 +169,13 @@ public class JumpTuningWindow : EditorWindow
         DrawProperty(tuningProperty, "maxDirectionAngle", "Maximum Angle");
         DrawProperty(tuningProperty, "directionSweepSpeed", "Sweep Speed (Degrees/Second)");
         DrawProperty(tuningProperty, "directionStartNormalized", "Start Position (0-1)");
-        DrawProperty(tuningProperty, "aimArrowXOffset", "Arrow X Offset");
+        DrawProperty(tuningProperty, "aimArrowFacingRightXOffset", "Arrow X Offset (Facing Right)");
+        DrawProperty(tuningProperty, "aimArrowFacingLeftXOffset", "Arrow X Offset (Facing Left)");
         DrawProperty(tuningProperty, "aimArrowYOffset", "Arrow Y Offset");
 
         EditorGUILayout.HelpBox(
-            "Arrow X/Y Offset은 Player 기준 로컬 좌표입니다. X 음수는 왼쪽, Y 음수는 아래로 이동합니다.",
+            "Arrow X Offset은 Player가 바라보는 방향별로 적용되는 로컬 좌표입니다. " +
+            "X 음수는 왼쪽, 공통 Y Offset의 음수는 아래로 이동합니다.",
             MessageType.None);
     }
 
