@@ -280,7 +280,9 @@ public static class MVPSceneBuilder
     private static GameObject CreatePlatformPrefab(Sprite sprite, PhysicsMaterial2D physicsMaterial)
     {
         GameObject platform = new GameObject("Platform");
-        SpriteRenderer renderer = platform.AddComponent<SpriteRenderer>();
+        GameObject visual = new GameObject("Visual");
+        visual.transform.SetParent(platform.transform, false);
+        SpriteRenderer renderer = visual.AddComponent<SpriteRenderer>();
         renderer.sprite = sprite;
         renderer.color = PlatformColor;
         renderer.sortingOrder = 0;
@@ -315,7 +317,7 @@ public static class MVPSceneBuilder
         }
         platform2D.SetSize(scale.x, scale.y);
 
-        SpriteRenderer renderer = platform.GetComponent<SpriteRenderer>();
+        SpriteRenderer renderer = platform2D.VisualRenderer;
         if (renderer != null)
         {
             renderer.color = PlatformColor;

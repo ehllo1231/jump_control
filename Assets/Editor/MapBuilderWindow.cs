@@ -293,7 +293,7 @@ public sealed class MapBuilderWindow : EditorWindow
             return;
         }
 
-        SpriteRenderer renderer = selectedObject.GetComponent<SpriteRenderer>();
+        SpriteRenderer renderer = FindPlatformSpriteRenderer(selectedObject);
         Vector2 worldSize = renderer.bounds.size;
         Transform parent = selectedObject.transform.parent;
         float parentScaleX = parent != null ? Mathf.Max(0.0001f, Mathf.Abs(parent.lossyScale.x)) : 1f;
@@ -303,6 +303,7 @@ public sealed class MapBuilderWindow : EditorWindow
         Undo.RecordObject(selectedObject.transform, "Convert Platform Scale");
         selectedObject.transform.localScale = Vector3.one;
 
+        MoveRendererToVisual(selectedObject, renderer);
         Platform2D platform = Undo.AddComponent<Platform2D>(selectedObject);
         platform.SetSize(localSize.x, localSize.y);
         EditorUtility.SetDirty(platform);
@@ -324,8 +325,72 @@ public sealed class MapBuilderWindow : EditorWindow
     {
         return candidate != null
             && candidate.GetComponent<Platform2D>() == null
-            && candidate.GetComponent<SpriteRenderer>() != null
+            && FindPlatformSpriteRenderer(candidate) != null
             && candidate.GetComponent<BoxCollider2D>() != null;
+    }
+
+    private static SpriteRenderer FindPlatformSpriteRenderer(GameObject root)
+    {
+        if (root == null)
+        {
+            return null;
+        }
+
+        SpriteRenderer rootRenderer = root.GetComponent<SpriteRenderer>();
+        if (rootRenderer != null)
+        {
+            return rootRenderer;
+        }
+
+        for (int i = 0; i < root.transform.childCount; i++)
+        {
+            Transform child = root.transform.GetChild(i);
+            if (child.name == "Visual")
+            {
+                SpriteRenderer visualRenderer = child.GetComponent<SpriteRenderer>();
+                if (visualRenderer != null)
+                {
+                    return visualRenderer;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static SpriteRenderer MoveRendererToVisual(GameObject root, SpriteRenderer sourceRenderer)
+    {
+        if (sourceRenderer.transform.parent == root.transform && sourceRenderer.gameObject.name == "Visual")
+        {
+            return sourceRenderer;
+        }
+
+        Transform visual = root.transform.Find("Visual");
+        if (visual == null)
+        {
+            GameObject visualObject = new GameObject("Visual");
+            visualObject.layer = root.layer;
+            Undo.RegisterCreatedObjectUndo(visualObject, "Create Platform Visual");
+            Undo.SetTransformParent(visualObject.transform, root.transform, "Parent Platform Visual");
+            visualObject.transform.localPosition = Vector3.zero;
+            visualObject.transform.localRotation = Quaternion.identity;
+            visualObject.transform.localScale = Vector3.one;
+            visual = visualObject.transform;
+        }
+
+        SpriteRenderer targetRenderer = visual.GetComponent<SpriteRenderer>();
+        if (targetRenderer == null)
+        {
+            targetRenderer = Undo.AddComponent<SpriteRenderer>(visual.gameObject);
+            EditorUtility.CopySerialized(sourceRenderer, targetRenderer);
+        }
+
+        if (sourceRenderer != targetRenderer)
+        {
+            Undo.DestroyObjectImmediate(sourceRenderer);
+        }
+
+        return targetRenderer;
     }
 
     private static Platform2D GetSelectedPlatform()
@@ -487,7 +552,7 @@ internal static class MapBuilderPlayModePersistence
         }
         EditorUtility.SetDirty(platform);
 
-        SpriteRenderer spriteRenderer = instance.GetComponent<SpriteRenderer>();
+        SpriteRenderer spriteRenderer = platform.VisualRenderer;
         if (spriteRenderer != null)
         {
             spriteRenderer.color = snapshot.color;
@@ -551,7 +616,7 @@ internal static class MapBuilderPlayModePersistence
 
         public static PlatformSnapshot FromPlatform(Platform2D platform)
         {
-            SpriteRenderer spriteRenderer = platform.GetComponent<SpriteRenderer>();
+            SpriteRenderer spriteRenderer = platform.VisualRenderer;
             Vector2[] triangleVertices = platform.GetTriangleVertices();
             return new PlatformSnapshot
             {

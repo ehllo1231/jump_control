@@ -1,7 +1,7 @@
 # UC-003-05: Play Mode 생성 Platform 유지
 
 - 상태: Implemented
-- 마지막 갱신일: 2026-06-22
+- 마지막 갱신일: 2026-07-17
 
 ## 목적
 
@@ -50,6 +50,7 @@
 - `MapBuilderWindow.CreatePlatform`은 Play Mode에서 Platform을 먼저 추적하고, 씬 dirty 기록은 Edit Mode에서만 수행한다.
 - `MapBuilderPlayModePersistence`가 Play Mode 종료 직전에 스냅샷을 저장하고 Edit Mode 복귀 후 열린 씬에 다시 생성한다.
 - `MapBuilderPlayModePersistence`도 Edit Mode 적용 시에만 씬 dirty 기록을 수행한다.
+- Platform 색상 스냅샷은 루트가 아니라 `Platform2D.VisualRenderer`의 색상을 저장하고 복원한다.
 - 이 기능은 Unity의 기본 Play Mode 임시 변경 동작을 보완하는 안전장치다.
 - 2026-06-22에 Play Mode 중 씬 dirty 기록 예외를 막도록 구현을 보강했다.
 - 2026-06-22 Platform 회전 조정 기능 추가 후에도 기존 Transform rotation 스냅샷으로 회전값을 유지한다.

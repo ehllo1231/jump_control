@@ -1,7 +1,7 @@
 # UC-003-07: 기본 Platform 색상 일관성 유지
 
 - 상태: Implemented
-- 마지막 갱신일: 2026-06-21
+- 마지막 갱신일: 2026-07-17
 
 ## 목적
 
@@ -41,7 +41,7 @@
 
 - 기본 발판 색은 `RGB(0.22, 0.24, 0.27)`로 통일했다.
 - `MVPSceneBuilder`와 `MVPJumpScene`의 기존 발판 색 override도 같은 색을 사용한다.
-- 삼각형 Platform은 자식 시각 오브젝트의 MeshRenderer가 SpriteRenderer 색상과 텍스처를 직접 받도록 `MaterialPropertyBlock`을 설정해 사각 Platform과 같은 색상 기준으로 표시한다.
+- 삼각형 Platform은 `Visual/Triangle Visual`의 MeshRenderer가 `Visual`의 SpriteRenderer 색상과 텍스처를 직접 받도록 `MaterialPropertyBlock`을 설정해 사각 Platform과 같은 색상 기준으로 표시한다.
 - 2026-06-22 삼각형 MeshRenderer 투명 표시 수정 후 Unity C# 컴파일러로 런타임 스크립트와 Editor 스크립트 컴파일을 확인했다. 오류와 경고 출력은 없었다.
 - 2026-06-22 삼각형 시각 메시를 자식 오브젝트로 분리한 뒤 Unity C# 컴파일러로 런타임 스크립트와 Editor 스크립트 컴파일을 확인했다. 오류와 경고 출력은 없었다.
 

@@ -1,7 +1,7 @@
 # UC-003-01: Platform 생성 및 크기 조정
 
 - 상태: Implemented
-- 마지막 갱신일: 2026-06-21
+- 마지막 갱신일: 2026-07-17
 
 ## 목적
 
@@ -28,7 +28,7 @@
 3. 시스템은 생성된 Platform을 선택한다.
 4. 사용자는 Scene View 이동 도구로 Platform 위치를 조정한다.
 5. 사용자는 Inspector에서 Width와 Height를 수정한다.
-6. 시스템은 SpriteRenderer와 BoxCollider2D 크기를 같은 Width와 Height로 갱신한다.
+6. 시스템은 `Visual` 자식의 SpriteRenderer와 Platform 루트의 BoxCollider2D 크기를 같은 Width와 Height로 갱신한다.
 7. 사용자가 SpriteRenderer 또는 Scene View Rect Tool로 보이는 Platform 도형 크기를 직접 바꾼다.
 8. 시스템은 변경된 도형 크기를 Platform 크기와 BoxCollider2D 크기에 반영한다.
 
@@ -49,11 +49,13 @@
 - [ ] Width와 Height 변경 시 SpriteRenderer와 BoxCollider2D 크기가 함께 변경된다.
 - [ ] SpriteRenderer 또는 Scene View Rect Tool로 보이는 도형 크기를 바꿔도 BoxCollider2D 크기가 함께 변경된다.
 - [ ] Platform 생성 및 크기 변경 시 Sprite tiling 또는 `OnValidate` 관련 오류가 발생하지 않는다.
+- [ ] 생성된 Platform은 루트에 `Platform2D`와 BoxCollider2D, 직접 자식 `Visual`에 SpriteRenderer를 가진다.
 
 ## 구현 메모
 
 - `MapBuilderWindow.CreatePlatform`이 Platform 프리팹을 활성 씬에 생성한다.
 - `Platform2D`가 Width, Height, TopCenter, WorldBounds를 관리하고 SpriteRenderer와 BoxCollider2D 크기를 동기화한다.
+- `Platform2D.VisualRenderer`가 직접 자식 `Visual`의 SpriteRenderer를 제공하고 루트 Collider와 크기 동기화를 유지한다.
 - `Platform2D.LateUpdate`가 SpriteRenderer의 보이는 크기 변경을 감지해 Width, Height, BoxCollider2D.size와 BoxCollider2D.offset을 다시 맞춘다.
 - Scene View Rect Tool 또는 SpriteRenderer size를 직접 수정한 경우에도 보이는 Platform 도형과 충돌체 크기가 같게 유지된다.
 - `Platform2DEditor`가 Width와 Height 입력 필드를 제공한다.

@@ -32,7 +32,6 @@ public enum PlatformShape2D
 /// </summary>
 [ExecuteAlways]
 [DisallowMultipleComponent]
-[RequireComponent(typeof(SpriteRenderer))]
 [RequireComponent(typeof(BoxCollider2D))]
 public sealed class Platform2D : MonoBehaviour, IPlatformSurface
 {
@@ -41,6 +40,7 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
     private const float MinimumTriangleArea = 0.0005f;
     private const int RightTriangleSpritePixels = 2048;
     private const int RightTriangleSpriteSupersampling = 2;
+    private const string VisualRootName = "Visual";
     private const string TriangleVisualName = "Triangle Visual";
     private const string RightTriangleSpriteNamePrefix = "Platform2D Right Triangle";
     private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
@@ -83,6 +83,14 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
     public float RotationDegrees => NormalizeSignedDegrees(transform.localEulerAngles.z);
     public bool UsesTriangleShape => IsTriangleShape;
     public bool UsesRightTriangleShape => IsRightTriangleShape;
+    public SpriteRenderer VisualRenderer
+    {
+        get
+        {
+            CacheReferences();
+            return spriteRenderer;
+        }
+    }
     public Bounds WorldBounds
     {
         get
@@ -363,7 +371,11 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
     {
         if (spriteRenderer == null)
         {
-            spriteRenderer = GetComponent<SpriteRenderer>();
+            spriteRenderer = FindVisualSpriteRenderer();
+            if (spriteRenderer == null)
+            {
+                spriteRenderer = GetComponent<SpriteRenderer>();
+            }
         }
 
         StoreRectangleSpriteIfNeeded();
@@ -688,6 +700,12 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
         Transform triangleVisual = FindTriangleVisual();
         if (triangleVisual != null)
         {
+            Transform visualRoot = GetOrCreateVisualRoot();
+            if (triangleVisual.parent != visualRoot)
+            {
+                triangleVisual.SetParent(visualRoot, false);
+            }
+
             ResetTriangleVisualTransform(triangleVisual);
             return triangleVisual;
         }
@@ -695,7 +713,7 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
         GameObject visualObject = new GameObject(TriangleVisualName);
         visualObject.layer = gameObject.layer;
         triangleVisual = visualObject.transform;
-        triangleVisual.SetParent(transform, false);
+        triangleVisual.SetParent(GetOrCreateVisualRoot(), false);
         ResetTriangleVisualTransform(triangleVisual);
 #if UNITY_EDITOR
         MarkTriangleVisualDirty(visualObject);
@@ -739,6 +757,16 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
 
     private Transform FindTriangleVisual()
     {
+        Transform visualRoot = FindVisualRoot();
+        if (visualRoot != null)
+        {
+            Transform nestedVisual = visualRoot.Find(TriangleVisualName);
+            if (nestedVisual != null)
+            {
+                return nestedVisual;
+            }
+        }
+
         Transform directChild = transform.Find(TriangleVisualName);
         if (directChild != null)
         {
@@ -756,6 +784,55 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
         }
 
         return null;
+    }
+
+    private SpriteRenderer FindVisualSpriteRenderer()
+    {
+        for (int i = 0; i < transform.childCount; i++)
+        {
+            Transform child = transform.GetChild(i);
+            if (child.name != VisualRootName)
+            {
+                continue;
+            }
+
+            SpriteRenderer renderer = child.GetComponent<SpriteRenderer>();
+            if (renderer != null)
+            {
+                return renderer;
+            }
+        }
+
+        return null;
+    }
+
+    private Transform FindVisualRoot()
+    {
+        SpriteRenderer renderer = FindVisualSpriteRenderer();
+        if (renderer != null)
+        {
+            return renderer.transform;
+        }
+
+        return transform.Find(VisualRootName);
+    }
+
+    private Transform GetOrCreateVisualRoot()
+    {
+        Transform visualRoot = FindVisualRoot();
+        if (visualRoot != null)
+        {
+            return visualRoot;
+        }
+
+        GameObject visualObject = new GameObject(VisualRootName);
+        visualObject.layer = gameObject.layer;
+        visualRoot = visualObject.transform;
+        visualRoot.SetParent(transform, false);
+#if UNITY_EDITOR
+        MarkTriangleVisualDirty(visualObject);
+#endif
+        return visualRoot;
     }
 
     private static void ResetTriangleVisualTransform(Transform triangleVisual)

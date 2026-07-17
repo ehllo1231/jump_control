@@ -936,6 +936,11 @@ public sealed class PlaytestLogViewerWindow : EditorWindow
         SpriteRenderer spriteRenderer = collider.GetComponent<SpriteRenderer>();
         if (spriteRenderer == null)
         {
+            spriteRenderer = collider.GetComponentInChildren<SpriteRenderer>(true);
+        }
+
+        if (spriteRenderer == null)
+        {
             spriteRenderer = collider.GetComponentInParent<SpriteRenderer>();
         }
 
