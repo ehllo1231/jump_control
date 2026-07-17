@@ -167,6 +167,7 @@ MonoBehaviour:
   triangleVertexA: {x: -1.25, y: -0.15}
   triangleVertexB: {x: 1.25, y: -0.15}
   triangleVertexC: {x: 0, y: 0.15}
+  renderVisuals: 1
   spriteRenderer: {fileID: 7923248077875491349}
   boxCollider: {fileID: 4163497357925990005}
   polygonCollider: {fileID: 0}
@@ -328,6 +329,7 @@ MonoBehaviour:
   triangleVertexA: {x: 0.4191246, y: -0.3258012}
   triangleVertexB: {x: -0.4191246, y: -0.3258012}
   triangleVertexC: {x: 0.4191246, y: 0.3258012}
+  renderVisuals: 1
   spriteRenderer: {fileID: 3501871636729401505}
   boxCollider: {fileID: 7254062458529225921}
   polygonCollider: {fileID: 5217973906644872863}
@@ -534,6 +536,7 @@ MonoBehaviour:
   triangleVertexA: {x: 0.4191246, y: -0.3258012}
   triangleVertexB: {x: -0.4191246, y: -0.3258012}
   triangleVertexC: {x: 0.4191246, y: 0.3258012}
+  renderVisuals: 1
   spriteRenderer: {fileID: 2233691976594786310}
   boxCollider: {fileID: 5389988418932868198}
   polygonCollider: {fileID: 6185962909055159784}
@@ -736,6 +739,7 @@ MonoBehaviour:
   triangleVertexA: {x: -1.25, y: -0.15}
   triangleVertexB: {x: 1.25, y: -0.15}
   triangleVertexC: {x: 0, y: 0.15}
+  renderVisuals: 1
   spriteRenderer: {fileID: 195448241282312600}
   boxCollider: {fileID: 6234356066298062328}
   polygonCollider: {fileID: 0}
@@ -888,6 +892,7 @@ MonoBehaviour:
   triangleVertexA: {x: -1.25, y: -0.15}
   triangleVertexB: {x: 1.25, y: -0.15}
   triangleVertexC: {x: 0, y: 0.15}
+  renderVisuals: 1
   spriteRenderer: {fileID: 854791368056773574}
   boxCollider: {fileID: 6912579937186355110}
   polygonCollider: {fileID: 0}

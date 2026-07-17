@@ -61,6 +61,9 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
     [SerializeField] private Vector2 triangleVertexB = new Vector2(1.25f, -0.15f);
     [SerializeField] private Vector2 triangleVertexC = new Vector2(0f, 0.15f);
 
+    [Header("Visual")]
+    [SerializeField] private bool renderVisuals = true;
+
     [Header("References")]
     [SerializeField] private SpriteRenderer spriteRenderer;
     [SerializeField] private BoxCollider2D boxCollider;
@@ -83,6 +86,7 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
     public float RotationDegrees => NormalizeSignedDegrees(transform.localEulerAngles.z);
     public bool UsesTriangleShape => IsTriangleShape;
     public bool UsesRightTriangleShape => IsRightTriangleShape;
+    public bool RendersVisuals => renderVisuals;
     public SpriteRenderer VisualRenderer
     {
         get
@@ -152,6 +156,17 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
     public void SetRotationDegrees(float degrees)
     {
         transform.localRotation = Quaternion.Euler(0f, 0f, degrees);
+    }
+
+    public void SetVisualRenderingEnabled(bool enabled)
+    {
+        if (renderVisuals == enabled)
+        {
+            return;
+        }
+
+        renderVisuals = enabled;
+        ApplySize();
     }
 
     public Vector2 GetTriangleVertex(int index)
@@ -305,7 +320,7 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
         }
 
         Vector2 visibleSize = Size;
-        if (spriteRenderer != null)
+        if (renderVisuals && spriteRenderer != null)
         {
             if (spriteRenderer.drawMode != SpriteDrawMode.Sliced)
             {
@@ -457,14 +472,21 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
 
         if (spriteRenderer != null)
         {
-            if (rectangleSprite != null && spriteRenderer.sprite != rectangleSprite)
+            if (!renderVisuals)
             {
-                spriteRenderer.sprite = rectangleSprite;
+                spriteRenderer.enabled = false;
             }
+            else
+            {
+                if (rectangleSprite != null && spriteRenderer.sprite != rectangleSprite)
+                {
+                    spriteRenderer.sprite = rectangleSprite;
+                }
 
-            spriteRenderer.enabled = true;
-            spriteRenderer.drawMode = SpriteDrawMode.Sliced;
-            spriteRenderer.size = platformSize;
+                spriteRenderer.enabled = true;
+                spriteRenderer.drawMode = SpriteDrawMode.Sliced;
+                spriteRenderer.size = platformSize;
+            }
         }
 
         if (boxCollider != null)
@@ -494,7 +516,7 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
             return;
         }
 
-        EnsureTriangleReferences();
+        EnsurePolygonCollider();
 
         if (spriteRenderer != null)
         {
@@ -513,6 +535,18 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
             polygonCollider.pathCount = 1;
             polygonCollider.SetPath(0, points);
         }
+
+        if (!renderVisuals)
+        {
+            if (triangleMeshRenderer != null)
+            {
+                triangleMeshRenderer.enabled = false;
+            }
+
+            return;
+        }
+
+        EnsureTriangleReferences();
 
         if (triangleMeshFilter != null)
         {
@@ -537,11 +571,18 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
         Vector2 platformSize = Size;
         if (spriteRenderer != null)
         {
-            StoreRectangleSpriteIfNeeded();
-            spriteRenderer.enabled = true;
-            spriteRenderer.sprite = GetRightTriangleSprite(Shape);
-            spriteRenderer.drawMode = SpriteDrawMode.Sliced;
-            spriteRenderer.size = platformSize;
+            if (!renderVisuals)
+            {
+                spriteRenderer.enabled = false;
+            }
+            else
+            {
+                StoreRectangleSpriteIfNeeded();
+                spriteRenderer.enabled = true;
+                spriteRenderer.sprite = GetRightTriangleSprite(Shape);
+                spriteRenderer.drawMode = SpriteDrawMode.Sliced;
+                spriteRenderer.size = platformSize;
+            }
         }
 
         if (boxCollider != null)
@@ -561,7 +602,7 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
     private void SyncRightTriangleToVisibleSize()
     {
         Vector2 visibleSize = Size;
-        if (spriteRenderer != null)
+        if (renderVisuals && spriteRenderer != null)
         {
             StoreRectangleSpriteIfNeeded();
             if (spriteRenderer.sprite == null || !IsGeneratedRightTriangleSprite(spriteRenderer.sprite))
