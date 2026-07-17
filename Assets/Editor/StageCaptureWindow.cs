@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Unity.Collections;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// 열린 2D 스테이지의 전체 Renderer 영역을 한 장의 세로형 PNG로 저장합니다.
+/// 열린 2D 스테이지의 전체 Renderer 영역을 하나 이상의 세로형 PNG로 저장합니다.
 /// </summary>
 public sealed class StageCaptureWindow : EditorWindow
 {
@@ -18,6 +19,7 @@ public sealed class StageCaptureWindow : EditorWindow
     [SerializeField] private Camera sourceCamera;
     [SerializeField] private Transform contentRoot;
     [SerializeField] private int outputWidth = DefaultOutputWidth;
+    [SerializeField] private int verticalSectionCount = 1;
     [SerializeField] private int tileHeight = DefaultTileHeight;
     [SerializeField] private int antiAliasing = 4;
     [SerializeField] private float padding = DefaultPadding;
@@ -27,7 +29,7 @@ public sealed class StageCaptureWindow : EditorWindow
     public static void OpenWindow()
     {
         StageCaptureWindow window = GetWindow<StageCaptureWindow>("Stage Capture");
-        window.minSize = new Vector2(430f, 410f);
+        window.minSize = new Vector2(430f, 500f);
         window.Show();
     }
 
@@ -56,7 +58,7 @@ public sealed class StageCaptureWindow : EditorWindow
         EditorGUILayout.Space(8f);
         EditorGUILayout.LabelField("Stage Portrait Capture", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
-            "현재 열린 2D 스테이지의 활성 Renderer 범위를 자동으로 계산하고, 월드 비율을 유지한 한 장의 고해상도 PNG로 저장합니다.",
+            "현재 열린 2D 스테이지의 활성 Renderer 범위를 자동으로 계산하고, 전체 세로 길이를 원하는 개수의 고해상도 PNG로 저장합니다.",
             MessageType.Info);
 
         EditorGUILayout.Space(6f);
@@ -88,13 +90,19 @@ public sealed class StageCaptureWindow : EditorWindow
 
         EditorGUILayout.Space(6f);
         outputWidth = Mathf.Max(256, EditorGUILayout.IntField("PNG Width", outputWidth));
+        verticalSectionCount = Mathf.Max(
+            1,
+            EditorGUILayout.IntField("Vertical Sections", verticalSectionCount));
+        EditorGUILayout.HelpBox(
+            "1이면 전체를 한 장으로 저장합니다. 2 이상이면 전체 세로 길이를 위에서 아래 순서로 나눠 저장합니다.",
+            MessageType.None);
         padding = Mathf.Max(0f, EditorGUILayout.FloatField("World Padding", padding));
         tileHeight = Mathf.Max(256, EditorGUILayout.IntField("Render Tile Height", tileHeight));
         antiAliasing = DrawAntiAliasingPopup(antiAliasing);
         revealAfterCapture = EditorGUILayout.Toggle("Reveal After Capture", revealAfterCapture);
 
         EditorGUILayout.Space(10f);
-        bool canCapture = StageCaptureUtility.TryCreatePlan(
+        bool hasPlan = StageCaptureUtility.TryCreatePlan(
             sourceCamera,
             contentRoot,
             outputWidth,
@@ -104,9 +112,16 @@ public sealed class StageCaptureWindow : EditorWindow
             out StageCapturePlan plan,
             out string error);
 
-        if (canCapture)
+        bool hasValidSectionCount = hasPlan && verticalSectionCount <= plan.Height;
+        if (hasPlan)
         {
-            DrawPlanSummary(plan);
+            DrawPlanSummary(plan, verticalSectionCount);
+            if (!hasValidSectionCount)
+            {
+                EditorGUILayout.HelpBox(
+                    $"Vertical Sections는 전체 이미지 높이({plan.Height:N0}px) 이하여야 합니다.",
+                    MessageType.Warning);
+            }
         }
         else
         {
@@ -114,11 +129,11 @@ public sealed class StageCaptureWindow : EditorWindow
         }
 
         EditorGUILayout.Space(8f);
-        using (new EditorGUI.DisabledScope(!canCapture))
+        using (new EditorGUI.DisabledScope(!hasValidSectionCount))
         {
-            if (GUILayout.Button("Capture Stage PNG...", GUILayout.Height(38f)))
+            if (GUILayout.Button("Capture Stage PNG(s)...", GUILayout.Height(38f)))
             {
-                Capture(plan);
+                Capture(plan, verticalSectionCount);
             }
         }
 
@@ -137,14 +152,28 @@ public sealed class StageCaptureWindow : EditorWindow
         return values[EditorGUILayout.Popup("Anti Aliasing", currentIndex, labels)];
     }
 
-    private static void DrawPlanSummary(StageCapturePlan plan)
+    private static void DrawPlanSummary(StageCapturePlan plan, int sectionCount)
     {
         double imageMemoryMegabytes = plan.Width * (double)plan.Height * 3d / (1024d * 1024d);
         EditorGUILayout.LabelField("Capture Preview", EditorStyles.boldLabel);
         EditorGUILayout.LabelField("Active Scene", plan.Scene.name);
         EditorGUILayout.LabelField("Included Renderers", plan.RendererCount.ToString("N0"));
         EditorGUILayout.LabelField("World Size", $"{plan.Area.width:F2} × {plan.Area.height:F2}");
-        EditorGUILayout.LabelField("PNG Resolution", $"{plan.Width:N0} × {plan.Height:N0}");
+        EditorGUILayout.LabelField("Full Resolution", $"{plan.Width:N0} × {plan.Height:N0}");
+        EditorGUILayout.LabelField("Output Files", sectionCount.ToString("N0"));
+        if (sectionCount <= plan.Height)
+        {
+            int maximumSectionHeight = StageCaptureUtility.GetSectionHeight(
+                plan.Height,
+                sectionCount,
+                0);
+            int minimumSectionHeight = plan.Height / sectionCount;
+            EditorGUILayout.LabelField(
+                "Section Resolution",
+                minimumSectionHeight == maximumSectionHeight
+                    ? $"{plan.Width:N0} × {minimumSectionHeight:N0}"
+                    : $"{plan.Width:N0} × {minimumSectionHeight:N0}~{maximumSectionHeight:N0}");
+        }
         EditorGUILayout.LabelField("Image Buffer", $"약 {imageMemoryMegabytes:F1} MB");
 
         if (plan.Height > plan.Width)
@@ -159,52 +188,70 @@ public sealed class StageCaptureWindow : EditorWindow
         }
     }
 
-    private void Capture(StageCapturePlan plan)
+    private void Capture(StageCapturePlan plan, int sectionCount)
     {
         string sceneName = string.IsNullOrEmpty(plan.Scene.name) ? "Stage" : plan.Scene.name;
-        string fileName = $"{sceneName}-portrait-{DateTime.Now:yyyyMMdd-HHmmss}.png";
+        string baseFileName = $"{sceneName}-portrait-{DateTime.Now:yyyyMMdd-HHmmss}";
         string directory = EditorPrefs.GetString(LastSaveDirectoryKey, GetProjectRoot());
         if (!Directory.Exists(directory))
         {
             directory = GetProjectRoot();
         }
 
-        string path = EditorUtility.SaveFilePanel(
-            "Save Stage Portrait PNG",
+        string selectedDirectory = EditorUtility.OpenFolderPanel(
+            "Select Stage Capture Folder",
             directory,
-            fileName,
-            "png");
+            string.Empty);
 
-        if (string.IsNullOrEmpty(path))
+        if (string.IsNullOrEmpty(selectedDirectory))
         {
             return;
         }
 
         try
         {
-            if (!StageCaptureUtility.Capture(plan, path))
+            if (!StageCaptureUtility.CaptureSections(
+                    plan,
+                    selectedDirectory,
+                    baseFileName,
+                    sectionCount,
+                    out string[] outputPaths))
             {
                 Debug.Log("Stage capture cancelled.");
                 return;
             }
 
-            string saveDirectory = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(saveDirectory))
+            EditorPrefs.SetString(LastSaveDirectoryKey, selectedDirectory);
+            for (int i = 0; i < outputPaths.Length; i++)
             {
-                EditorPrefs.SetString(LastSaveDirectoryKey, saveDirectory);
+                ImportIfInsideAssets(outputPaths[i]);
             }
 
-            ImportIfInsideAssets(path);
-            Debug.Log($"Stage portrait saved: {path} ({plan.Width}x{plan.Height})");
+            Debug.Log(
+                $"Stage portrait saved: {outputPaths.Length} file(s) in {selectedDirectory} " +
+                $"(full size {plan.Width}x{plan.Height})");
 
             if (revealAfterCapture)
             {
-                EditorUtility.RevealInFinder(path);
+                EditorUtility.RevealInFinder(outputPaths[0]);
             }
 
+            int minimumSectionHeight = plan.Height / outputPaths.Length;
+            int maximumSectionHeight = StageCaptureUtility.GetSectionHeight(
+                plan.Height,
+                outputPaths.Length,
+                0);
+            string sectionHeightLabel = minimumSectionHeight == maximumSectionHeight
+                ? minimumSectionHeight.ToString("N0")
+                : $"{minimumSectionHeight:N0}~{maximumSectionHeight:N0}";
+            string resultMessage = outputPaths.Length == 1
+                ? $"{plan.Width:N0} × {plan.Height:N0} PNG 저장 완료\n\n{outputPaths[0]}"
+                : $"{outputPaths.Length:N0}개 PNG 저장 완료\n" +
+                  $"전체 해상도: {plan.Width:N0} × {plan.Height:N0}\n" +
+                  $"분할 해상도: {plan.Width:N0} × {sectionHeightLabel}\n\n{selectedDirectory}";
             EditorUtility.DisplayDialog(
                 "Stage Capture Complete",
-                $"{plan.Width:N0} × {plan.Height:N0} PNG 저장 완료\n\n{path}",
+                resultMessage,
                 "OK");
         }
         catch (Exception exception)
@@ -474,9 +521,76 @@ internal static class StageCaptureUtility
             throw new ArgumentException("Output path is empty.", nameof(outputPath));
         }
 
+        return Capture(plan, new[] { outputPath }, false);
+    }
+
+    public static bool CaptureSections(
+        StageCapturePlan plan,
+        string outputDirectory,
+        string baseFileName,
+        int sectionCount,
+        out string[] outputPaths)
+    {
+        if (string.IsNullOrWhiteSpace(outputDirectory))
+        {
+            throw new ArgumentException("Output directory is empty.", nameof(outputDirectory));
+        }
+
+        if (string.IsNullOrWhiteSpace(baseFileName))
+        {
+            throw new ArgumentException("Base file name is empty.", nameof(baseFileName));
+        }
+
+        if (sectionCount < 1 || sectionCount > plan.Height)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(sectionCount),
+                $"Section count must be between 1 and {plan.Height:N0}.");
+        }
+
+        outputPaths = CreateUniqueOutputPaths(
+            outputDirectory,
+            SanitizeFileName(baseFileName),
+            sectionCount);
+        return Capture(plan, outputPaths, true);
+    }
+
+    public static int GetSectionHeight(int totalPixelHeight, int sectionCount, int sectionIndex)
+    {
+        if (totalPixelHeight < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(totalPixelHeight));
+        }
+
+        if (sectionCount < 1 || sectionCount > totalPixelHeight)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sectionCount));
+        }
+
+        if (sectionIndex < 0 || sectionIndex >= sectionCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sectionIndex));
+        }
+
+        int baseHeight = totalPixelHeight / sectionCount;
+        int remainder = totalPixelHeight % sectionCount;
+        return baseHeight + (sectionIndex < remainder ? 1 : 0);
+    }
+
+    private static bool Capture(
+        StageCapturePlan plan,
+        IReadOnlyList<string> outputPaths,
+        bool deleteOutputsOnFailure)
+    {
+        if (outputPaths == null || outputPaths.Count < 1 || outputPaths.Count > plan.Height)
+        {
+            throw new ArgumentException("Output path count is invalid.", nameof(outputPaths));
+        }
+
         Texture2D image = null;
         GameObject captureCameraObject = null;
         RenderTexture previousActive = RenderTexture.active;
+        List<string> createdOutputPaths = new List<string>();
 
         try
         {
@@ -520,22 +634,18 @@ internal static class StageCaptureUtility
                 tileIndex++;
             }
 
-            EditorUtility.DisplayProgressBar("Stage Portrait Capture", "PNG 인코딩 중...", 0.95f);
             image.Apply(false, false);
-            byte[] pngBytes = image.EncodeToPNG();
-            if (pngBytes == null || pngBytes.Length == 0)
-            {
-                throw new InvalidOperationException("Unity가 PNG 데이터를 생성하지 못했습니다.");
-            }
-
-            string directory = Path.GetDirectoryName(outputPath);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            File.WriteAllBytes(outputPath, pngBytes);
+            SaveOutputImages(image, outputPaths, createdOutputPaths);
             return true;
+        }
+        catch
+        {
+            if (deleteOutputsOnFailure)
+            {
+                DeleteGeneratedFiles(createdOutputPaths);
+            }
+
+            throw;
         }
         finally
         {
@@ -550,6 +660,172 @@ internal static class StageCaptureUtility
             if (image != null)
             {
                 UnityEngine.Object.DestroyImmediate(image);
+            }
+        }
+    }
+
+    private static void SaveOutputImages(
+        Texture2D fullImage,
+        IReadOnlyList<string> outputPaths,
+        List<string> createdOutputPaths)
+    {
+        if (outputPaths.Count == 1)
+        {
+            EditorUtility.DisplayProgressBar("Stage Portrait Capture", "PNG 인코딩 중 (1/1)", 0.95f);
+            WritePng(fullImage, outputPaths[0], createdOutputPaths);
+            return;
+        }
+
+        NativeArray<byte> fullImageData = fullImage.GetRawTextureData<byte>();
+        int bytesPerRow = fullImage.width * 3;
+        int topPixelOffset = 0;
+
+        for (int sectionIndex = 0; sectionIndex < outputPaths.Count; sectionIndex++)
+        {
+            EditorUtility.DisplayProgressBar(
+                "Stage Portrait Capture",
+                $"분할 PNG 인코딩 중 ({sectionIndex + 1}/{outputPaths.Count})",
+                0.9f + 0.1f * sectionIndex / outputPaths.Count);
+
+            int sectionHeight = GetSectionHeight(
+                fullImage.height,
+                outputPaths.Count,
+                sectionIndex);
+            int sourceY = fullImage.height - topPixelOffset - sectionHeight;
+            Texture2D sectionImage = new Texture2D(
+                fullImage.width,
+                sectionHeight,
+                TextureFormat.RGB24,
+                false);
+            sectionImage.name = $"Stage Capture Section {sectionIndex + 1}";
+
+            try
+            {
+                NativeArray<byte> sectionData = sectionImage.GetRawTextureData<byte>();
+                NativeArray<byte>.Copy(
+                    fullImageData,
+                    sourceY * bytesPerRow,
+                    sectionData,
+                    0,
+                    sectionHeight * bytesPerRow);
+                sectionImage.Apply(false, false);
+                WritePng(sectionImage, outputPaths[sectionIndex], createdOutputPaths);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(sectionImage);
+            }
+
+            topPixelOffset += sectionHeight;
+        }
+    }
+
+    private static void WritePng(
+        Texture2D image,
+        string outputPath,
+        List<string> createdOutputPaths)
+    {
+        byte[] pngBytes = image.EncodeToPNG();
+        if (pngBytes == null || pngBytes.Length == 0)
+        {
+            throw new InvalidOperationException("Unity가 PNG 데이터를 생성하지 못했습니다.");
+        }
+
+        string directory = Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        createdOutputPaths.Add(outputPath);
+        File.WriteAllBytes(outputPath, pngBytes);
+    }
+
+    private static string[] CreateUniqueOutputPaths(
+        string outputDirectory,
+        string baseFileName,
+        int sectionCount)
+    {
+        int suffix = 1;
+        while (true)
+        {
+            string candidateBaseName = suffix == 1
+                ? baseFileName
+                : $"{baseFileName}-{suffix}";
+            string[] paths = CreateOutputPaths(
+                outputDirectory,
+                candidateBaseName,
+                sectionCount);
+            bool hasCollision = false;
+            for (int i = 0; i < paths.Length; i++)
+            {
+                if (File.Exists(paths[i]))
+                {
+                    hasCollision = true;
+                    break;
+                }
+            }
+
+            if (!hasCollision)
+            {
+                return paths;
+            }
+
+            suffix++;
+        }
+    }
+
+    private static string[] CreateOutputPaths(
+        string outputDirectory,
+        string baseFileName,
+        int sectionCount)
+    {
+        if (sectionCount == 1)
+        {
+            return new[] { Path.Combine(outputDirectory, $"{baseFileName}.png") };
+        }
+
+        int numberWidth = Mathf.Max(2, sectionCount.ToString().Length);
+        string countLabel = sectionCount.ToString($"D{numberWidth}");
+        string[] paths = new string[sectionCount];
+        for (int sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++)
+        {
+            string partLabel = (sectionIndex + 1).ToString($"D{numberWidth}");
+            paths[sectionIndex] = Path.Combine(
+                outputDirectory,
+                $"{baseFileName}-part-{partLabel}-of-{countLabel}.png");
+        }
+
+        return paths;
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        string sanitized = Path.GetFileNameWithoutExtension(fileName);
+        char[] invalidCharacters = Path.GetInvalidFileNameChars();
+        for (int i = 0; i < invalidCharacters.Length; i++)
+        {
+            sanitized = sanitized.Replace(invalidCharacters[i], '_');
+        }
+
+        return string.IsNullOrWhiteSpace(sanitized) ? "Stage-portrait" : sanitized;
+    }
+
+    private static void DeleteGeneratedFiles(IReadOnlyList<string> paths)
+    {
+        for (int i = 0; i < paths.Count; i++)
+        {
+            try
+            {
+                if (File.Exists(paths[i]))
+                {
+                    File.Delete(paths[i]);
+                }
+            }
+            catch (Exception cleanupException)
+            {
+                Debug.LogWarning(
+                    $"Failed to clean up incomplete stage capture: {paths[i]}\n{cleanupException.Message}");
             }
         }
     }
