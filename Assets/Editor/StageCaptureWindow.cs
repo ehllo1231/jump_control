@@ -260,9 +260,16 @@ public sealed class StageCaptureWindow : EditorWindow
         GameObject[] roots = scene.GetRootGameObjects();
         for (int i = 0; i < roots.Length; i++)
         {
-            if (string.Equals(roots[i].name, "Demon Castle Interior", StringComparison.Ordinal))
+            Transform[] descendants = roots[i].GetComponentsInChildren<Transform>(true);
+            for (int descendantIndex = 0; descendantIndex < descendants.Length; descendantIndex++)
             {
-                return roots[i].transform;
+                if (string.Equals(
+                        descendants[descendantIndex].name,
+                        "Demon Castle Interior",
+                        StringComparison.Ordinal))
+                {
+                    return descendants[descendantIndex];
+                }
             }
         }
 
@@ -330,6 +337,9 @@ internal readonly struct StageCapturePlan
 internal static class StageCaptureUtility
 {
     private const float MinimumWorldSize = 0.001f;
+    private const float MinimumBoundarySearchDistance = 0.25f;
+    private const float MaximumBoundarySearchDistance = 2f;
+    private const float BoundarySearchWidthRatio = 0.05f;
 
     public static bool TryCreatePlan(
         Camera sourceCamera,
@@ -387,6 +397,26 @@ internal static class StageCaptureUtility
         }
 
         List<Renderer> renderers = GetCandidateRenderers(scene, contentRoot);
+        if (contentRoot != null)
+        {
+            if (!TryCalculateCameraSpaceBounds(
+                    sourceCamera,
+                    renderers,
+                    0f,
+                    out Rect contentArea,
+                    out _))
+            {
+                error = "Source Camera에 표시되는 활성 Renderer를 찾지 못했습니다.";
+                return false;
+            }
+
+            AddAdjacentStageBoundaryRenderers(
+                sourceCamera,
+                contentRoot,
+                contentArea,
+                renderers);
+        }
+
         if (!TryCalculateCameraSpaceBounds(
                 sourceCamera,
                 renderers,
@@ -614,6 +644,56 @@ internal static class StageCaptureUtility
         return renderers;
     }
 
+    private static void AddAdjacentStageBoundaryRenderers(
+        Camera camera,
+        Transform contentRoot,
+        Rect contentArea,
+        List<Renderer> renderers)
+    {
+        float horizontalSearchDistance = Mathf.Clamp(
+            contentArea.width * BoundarySearchWidthRatio,
+            MinimumBoundarySearchDistance,
+            MaximumBoundarySearchDistance);
+        Rect horizontalSearchArea = Rect.MinMaxRect(
+            contentArea.xMin - horizontalSearchDistance,
+            contentArea.yMin,
+            contentArea.xMax + horizontalSearchDistance,
+            contentArea.yMax);
+
+        HashSet<Renderer> includedRenderers = new HashSet<Renderer>(renderers);
+        Renderer[] stageRenderers = contentRoot.root.GetComponentsInChildren<Renderer>(false);
+        for (int i = 0; i < stageRenderers.Length; i++)
+        {
+            Renderer renderer = stageRenderers[i];
+            if (includedRenderers.Contains(renderer) || !ShouldIncludeRenderer(camera, renderer))
+            {
+                continue;
+            }
+
+            Rect rendererArea = GetCameraSpaceBounds(camera, renderer);
+            bool overlapsVertically =
+                rendererArea.yMax >= contentArea.yMin && rendererArea.yMin <= contentArea.yMax;
+            bool touchesContentHorizontally =
+                rendererArea.xMax >= horizontalSearchArea.xMin &&
+                rendererArea.xMin <= horizontalSearchArea.xMax;
+            bool extendsHorizontalBoundary =
+                rendererArea.xMin < contentArea.xMin || rendererArea.xMax > contentArea.xMax;
+            bool isReasonableBoundaryWidth =
+                rendererArea.width <= contentArea.width + MinimumWorldSize;
+
+            if (!overlapsVertically ||
+                !touchesContentHorizontally ||
+                !extendsHorizontalBoundary ||
+                !isReasonableBoundaryWidth)
+            {
+                continue;
+            }
+
+            renderers.Add(renderer);
+            includedRenderers.Add(renderer);
+        }
+    }
+
     private static bool TryCalculateCameraSpaceBounds(
         Camera camera,
         List<Renderer> renderers,
@@ -636,21 +716,11 @@ internal static class StageCaptureUtility
                 continue;
             }
 
-            Bounds bounds = renderer.bounds;
-            Vector3 center = bounds.center;
-            Vector3 extents = bounds.extents;
-            for (int corner = 0; corner < 8; corner++)
-            {
-                Vector3 worldCorner = center + new Vector3(
-                    (corner & 1) == 0 ? -extents.x : extents.x,
-                    (corner & 2) == 0 ? -extents.y : extents.y,
-                    (corner & 4) == 0 ? -extents.z : extents.z);
-                Vector3 cameraSpaceCorner = camera.transform.InverseTransformPoint(worldCorner);
-                minimumX = Mathf.Min(minimumX, cameraSpaceCorner.x);
-                maximumX = Mathf.Max(maximumX, cameraSpaceCorner.x);
-                minimumY = Mathf.Min(minimumY, cameraSpaceCorner.y);
-                maximumY = Mathf.Max(maximumY, cameraSpaceCorner.y);
-            }
+            Rect rendererArea = GetCameraSpaceBounds(camera, renderer);
+            minimumX = Mathf.Min(minimumX, rendererArea.xMin);
+            maximumX = Mathf.Max(maximumX, rendererArea.xMax);
+            minimumY = Mathf.Min(minimumY, rendererArea.yMin);
+            maximumY = Mathf.Max(maximumY, rendererArea.yMax);
 
             hasBounds = true;
             includedCount++;
@@ -671,6 +741,32 @@ internal static class StageCaptureUtility
         float height = Mathf.Max(MinimumWorldSize, maximumY - minimumY);
         area = new Rect(minimumX, minimumY, width, height);
         return true;
+    }
+
+    private static Rect GetCameraSpaceBounds(Camera camera, Renderer renderer)
+    {
+        Bounds bounds = renderer.bounds;
+        Vector3 center = bounds.center;
+        Vector3 extents = bounds.extents;
+        float minimumX = float.PositiveInfinity;
+        float maximumX = float.NegativeInfinity;
+        float minimumY = float.PositiveInfinity;
+        float maximumY = float.NegativeInfinity;
+
+        for (int corner = 0; corner < 8; corner++)
+        {
+            Vector3 worldCorner = center + new Vector3(
+                (corner & 1) == 0 ? -extents.x : extents.x,
+                (corner & 2) == 0 ? -extents.y : extents.y,
+                (corner & 4) == 0 ? -extents.z : extents.z);
+            Vector3 cameraSpaceCorner = camera.transform.InverseTransformPoint(worldCorner);
+            minimumX = Mathf.Min(minimumX, cameraSpaceCorner.x);
+            maximumX = Mathf.Max(maximumX, cameraSpaceCorner.x);
+            minimumY = Mathf.Min(minimumY, cameraSpaceCorner.y);
+            maximumY = Mathf.Max(maximumY, cameraSpaceCorner.y);
+        }
+
+        return Rect.MinMaxRect(minimumX, minimumY, maximumX, maximumY);
     }
 
     private static bool ShouldIncludeRenderer(Camera camera, Renderer renderer)
