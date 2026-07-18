@@ -21,24 +21,33 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 | UC-002-11 | 디버그 피격 판정 표시 | Implemented | [문서](./UC-002-11-show-debug-hitbox.md) | 2026-06-27 |
 | UC-002-12 | 플레이어 이미지 파일 자동 반영 | Implemented | [문서](./UC-002-12-auto-update-player-sprite.md) | 2026-06-27 |
 | UC-003 | 2D 점프 맵 제작 툴 기능군 | Superseded | [문서](./UC-003-map-authoring-tool.md) | 2026-06-21 |
-| UC-003-01 | Platform 생성 및 크기 조정 | Implemented | [문서](./UC-003-01-create-and-size-platform.md) | 2026-06-21 |
-| UC-003-02 | 기존 오브젝트를 Platform으로 변환 | Implemented | [문서](./UC-003-02-convert-selected-platform.md) | 2026-06-22 |
+| UC-003-01 | Platform 생성 및 크기 조정 | Implemented | [문서](./UC-003-01-create-and-size-platform.md) | 2026-07-17 |
+| UC-003-02 | 기존 오브젝트를 Platform으로 변환 | Implemented | [문서](./UC-003-02-convert-selected-platform.md) | 2026-07-17 |
 | UC-003-03 | 선택한 두 Platform 거리 표시 | Implemented | [문서](./UC-003-03-measure-selected-platforms.md) | 2026-06-21 |
 | UC-003-04 | 선택 Platform에서 플레이 테스트 시작 | Implemented | [문서](./UC-003-04-start-playtest-from-platform.md) | 2026-06-21 |
-| UC-003-05 | Play Mode 생성 Platform 유지 | Implemented | [문서](./UC-003-05-persist-play-mode-platforms.md) | 2026-06-22 |
+| UC-003-05 | Play Mode 생성 Platform 유지 | Implemented | [문서](./UC-003-05-persist-play-mode-platforms.md) | 2026-07-17 |
 | UC-003-06 | 점프 도달 후보 표시 | Implemented | [문서](./UC-003-06-show-jump-reachability.md) | 2026-06-26 |
-| UC-003-07 | 기본 Platform 색상 일관성 유지 | Implemented | [문서](./UC-003-07-keep-platform-color-consistent.md) | 2026-06-22 |
-| UC-003-08 | 코드 수정 중 사용자 맵 구성 보존 | Implemented | [문서](./UC-003-08-preserve-user-map-edits.md) | 2026-06-23 |
-| UC-003-09 | 삼각형 Platform 생성 | Implemented | [문서](./UC-003-09-create-triangle-platform.md) | 2026-06-25 |
+| UC-003-07 | 기본 Platform 색상 일관성 유지 | Implemented | [문서](./UC-003-07-keep-platform-color-consistent.md) | 2026-07-17 |
+| UC-003-08 | 코드 수정 중 사용자 맵 구성 보존 | Implemented | [문서](./UC-003-08-preserve-user-map-edits.md) | 2026-07-17 |
+| UC-003-09 | 삼각형 Platform 생성 | Implemented | [문서](./UC-003-09-create-triangle-platform.md) | 2026-07-17 |
 | UC-003-10 | Platform 회전 조정 | Implemented | [문서](./UC-003-10-rotate-platform.md) | 2026-06-22 |
-| UC-003-11 | 직각 삼각형 Platform 생성 및 편집 | Implemented | [문서](./UC-003-11-create-right-triangle-platform.md) | 2026-06-25 |
-| UC-004-01 | 배경음악 일시정지 지점 재개 | Implemented | [문서](./UC-004-01-resume-background-music.md) | 2026-06-26 |
-| UC-004-02 | Android 빌드 배경음악 재생 | Implemented | [문서](./UC-004-02-play-background-music-on-android.md) | 2026-06-27 |
+| UC-003-11 | 직각 삼각형 Platform 생성 및 편집 | Implemented | [문서](./UC-003-11-create-right-triangle-platform.md) | 2026-07-17 |
+| UC-003-12 | Stage1 구조물 계층 정리 | Superseded | [문서](./UC-003-12-organize-stage-hierarchy.md) | 2026-07-17 |
+| UC-003-13 | Stage1 아트와 충돌 구조 분리 | Verified | [문서](./UC-003-13-separate-stage1-art-from-collision.md) | 2026-07-17 |
+| UC-003-14 | Stage1 기본 스프라이트 디자인 테스트 적용 | Superseded | [문서](./UC-003-14-apply-stage1-basic-sprite-test.md) | 2026-07-17 |
+| UC-003-15 | Stage1 큰 삼각형 시각 경계와 충돌 정렬 | Verified | [문서](./UC-003-15-align-stage1-large-triangle-collision.md) | 2026-07-17 |
+| UC-003-16 | Stage1 분할 디자인 이미지 적용 | Verified | [문서](./UC-003-16-apply-stage1-design-section.md) | 2026-07-17 |
+| UC-004-01 | 배경음악 일시정지 지점 재개 | Implemented | [문서](./UC-004-01-resume-background-music.md) | 2026-07-12 |
+| UC-004-02 | Android 빌드 배경음악 재생 | Implemented | [문서](./UC-004-02-play-background-music-on-android.md) | 2026-07-12 |
+| UC-004-03 | 배경음악 설정 전환 | Implemented | [문서](./UC-004-03-toggle-background-music-setting.md) | 2026-07-12 |
 | UC-005-01 | Android 앱 가로 실행 | Implemented | [문서](./UC-005-01-launch-android-in-landscape.md) | 2026-06-27 |
 | UC-005-02 | Android 120 FPS 및 터치 반응성 | Implemented | [문서](./UC-005-02-run-android-at-120-fps.md) | 2026-06-27 |
 | UC-006-01 | 재시작 시 플레이어 위치 복원 | Implemented | [문서](./UC-006-01-resume-player-position-after-restart.md) | 2026-06-27 |
 | UC-007-01 | 플레이테스트 이동 및 이벤트 로그 기록 | Implemented | [문서](./UC-007-01-record-playtest-logs.md) | 2026-06-27 |
 | UC-007-02 | 플레이테스트 로그 Scene View 시각화 | Implemented | [문서](./UC-007-02-visualize-playtest-logs.md) | 2026-06-27 |
 | UC-007-03 | 플레이테스트 로그 뷰어 툴 | Implemented | [문서](./UC-007-03-view-playtest-logs-in-tool.md) | 2026-06-27 |
+| UC-008-01 | Android 진동 피드백 | In Progress | [문서](./UC-008-01-android-haptic-feedback.md) | 2026-07-06 |
+| UC-008-02 | 진동 설정 전환 | Implemented | [문서](./UC-008-02-toggle-vibration-setting.md) | 2026-07-12 |
+| UC-009-01 | 게임 내 설정 메뉴 열기 | Implemented | [문서](./UC-009-01-open-in-game-settings-menu.md) | 2026-07-12 |
 | UC-010-01 | 스테이지 전체를 세로 고화질 이미지로 저장 | Verified | [문서](./UC-010-01-capture-stage-as-portrait-image.md) | 2026-07-17 |
 | UC-010-02 | 스테이지 캡처를 세로 구간별 이미지로 저장 | Verified | [문서](./UC-010-02-save-stage-as-vertical-sections.md) | 2026-07-17 |

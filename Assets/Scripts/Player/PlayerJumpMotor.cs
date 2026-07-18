@@ -161,6 +161,7 @@ public class PlayerJumpMotor : MonoBehaviour
         SeparateFromWall(wallNormal);
         lastWallBounceVelocity = body.linearVelocity;
         lastWallBounceTime = Time.time;
+        GameHaptics.PlayWallBounce(Mathf.InverseLerp(exitSpeedFloor, exitSpeedFloor + 8f, bounceSpeed));
     }
 
     private float GetWallBounceVerticalVelocity(float currentVelocityY)

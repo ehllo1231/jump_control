@@ -251,6 +251,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::JumpInputReader
   enableKeyboardInput: 1
   jumpKey: 32
+  enableTouchInput: 1
+  enableEditorMouseTouchSimulation: 0
 --- !u!114 &9175784076139841415
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -268,6 +270,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   checkRadius: 0.08
+  horizontalInset: 0
   isGrounded: 0
 --- !u!114 &2346754378861544203
 MonoBehaviour:
@@ -285,7 +288,15 @@ MonoBehaviour:
   impulseMultiplier: 1
   clearVelocityBeforeJump: 1
   keepHorizontalVelocityOnJump: 0
+  wallBounceElasticity: 0.18
+  wallBounceVerticalVelocityMode: 0
+  minimumWallNormalX: 0.55
+  minimumWallBounceExitSpeed: 1.25
+  wallBounceCooldown: 0.08
+  wallBounceSeparationDistance: 0.015
   lastAppliedImpulse: {x: 0, y: 0}
+  lastWallBounceVelocity: {x: 0, y: 0}
+  velocityBeforePhysicsStep: {x: 0, y: 0}
 --- !u!114 &5711780390436341776
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -323,16 +334,41 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7a3b0c442d61a8941882baeef6d0bcbf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::JumpPowerGauge
-  minPower: 7
-  maxPower: 16
-  cycleDuration: 1.15
   localOffset: {x: 0.82, y: 0.05}
   barWidth: 0.16
   barHeight: 1.05
   gaugeSprite: {fileID: 21300000, guid: 99759b0d0744c7f4dab2184f598b9d03, type: 3}
   backgroundColor: {r: 0.04, g: 0.05, b: 0.06, a: 0.85}
-  fillColor: {r: 0.1, g: 0.75, b: 1, a: 0.95}
-  lockedFillColor: {r: 1, g: 0.82, b: 0.15, a: 1}
+  fillColorGradient:
+    serializedVersion: 2
+    key0: {r: 0.1, g: 0.55, b: 1, a: 0.95}
+    key1: {r: 0.02, g: 0.85, b: 1, a: 0.95}
+    key2: {r: 1, g: 0.88, b: 0.16, a: 1}
+    key3: {r: 1, g: 0.45, b: 0.08, a: 0}
+    key4: {r: 1, g: 0.08, b: 0.05, a: 0}
+    key5: {r: 0, g: 0, b: 0, a: 0}
+    key6: {r: 0, g: 0, b: 0, a: 0}
+    key7: {r: 0, g: 0, b: 0, a: 0}
+    ctime0: 0
+    ctime1: 22937
+    ctime2: 44564
+    ctime3: 56360
+    ctime4: 65535
+    ctime5: 0
+    ctime6: 0
+    ctime7: 0
+    atime0: 0
+    atime1: 45875
+    atime2: 65535
+    atime3: 0
+    atime4: 0
+    atime5: 0
+    atime6: 0
+    atime7: 0
+    m_Mode: 0
+    m_ColorSpace: -1
+    m_NumColorKeys: 5
+    m_NumAlphaKeys: 3
   normalizedValue: 0
   currentPower: 7
   locked: 0
@@ -348,10 +384,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8324bcfefa2dab649844f620f27816b4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::JumpAngleAim
-  minAngle: -62
-  maxAngle: 62
-  sweepSpeedDegreesPerSecond: 145
-  startNormalizedPosition: 0.5
   localOffset: {x: 0, y: 0.86}
   arrowLength: 0.86
   shaftWidth: 0.07
@@ -377,9 +409,52 @@ MonoBehaviour:
   jumpMotor: {fileID: 2346754378861544203}
   groundChecker: {fileID: 9175784076139841415}
   playerVisual: {fileID: 5711780390436341776}
+  bodyCollider: {fileID: 5896041135039201122}
+  body: {fileID: 4609844383124906590}
+  jumpTuning:
+    playerSquareSize: 0.72
+    playerVisualScale: 1.8
+    playerVisualXOffset: 0
+    playerVisualYOffset: 0
+    wallBounceElasticity: 0.18
+    wallBounceVerticalVelocityMode: 0
+    minDirectionAngle: -62
+    maxDirectionAngle: 62
+    directionSweepSpeed: 145
+    directionStartNormalized: 0.5
+    gaugeChargeDuration: 1.15
+    minimumJumpPower: 7
+    maximumJumpPower: 16
+    gaugePowerResponse:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0
+        inSlope: 0
+        outSlope: 1
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      - serializedVersion: 3
+        time: 1
+        value: 1
+        inSlope: 1
+        outSlope: 0
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: 0
+        outWeight: 0
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    debugModeEnabled: 0
   minimumJumpingTime: 0.08
   landingVerticalSpeedThreshold: 0.35
   currentState: 0
   lockedPower: 0
+  lockedJumpAngle: 0
+  lockedJumpDirection: {x: 0, y: 1}
   lastJumpAngle: 0
   lastJumpVector: {x: 0, y: 0}

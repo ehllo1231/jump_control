@@ -35,6 +35,12 @@ public sealed class BackgroundMusicLoop : MonoBehaviour
         ConfigureAudioSource();
     }
 
+    private void OnEnable()
+    {
+        GameMusic.EnabledChanged += ApplyMusicSetting;
+        ApplyMusicSetting(GameMusic.Enabled);
+    }
+
     private void Start()
     {
         if (playOnStart)
@@ -187,6 +193,7 @@ public sealed class BackgroundMusicLoop : MonoBehaviour
         audioSource.playOnAwake = false;
         audioSource.loop = false;
         audioSource.spatialBlend = 0f;
+        audioSource.mute = !GameMusic.Enabled;
         if (resetVolume)
         {
             audioSource.volume = volume;
@@ -195,7 +202,17 @@ public sealed class BackgroundMusicLoop : MonoBehaviour
 
     private void OnDisable()
     {
+        GameMusic.EnabledChanged -= ApplyMusicSetting;
         Stop();
+    }
+
+    private void ApplyMusicSetting(bool enabled)
+    {
+        CacheAudioSource();
+        if (audioSource != null)
+        {
+            audioSource.mute = !enabled;
+        }
     }
 
     private void OnApplicationPause(bool pauseStatus)

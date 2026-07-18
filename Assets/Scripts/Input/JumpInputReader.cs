@@ -65,7 +65,12 @@ public class JumpInputReader : MonoBehaviour
     private bool IsTouchHeld()
     {
 #if UNITY_EDITOR
-        if (enableEditorMouseTouchSimulation && Input.GetMouseButton(0))
+        TouchPhase mousePhase = Input.GetMouseButtonDown(0)
+            ? TouchPhase.Began
+            : TouchPhase.Stationary;
+        if (enableEditorMouseTouchSimulation
+            && Input.GetMouseButton(0)
+            && !GameSettingsMenu.BlocksJumpInput(Input.mousePosition, mousePhase))
         {
             return true;
         }
@@ -73,7 +78,13 @@ public class JumpInputReader : MonoBehaviour
 
         for (int i = 0; i < Input.touchCount; i++)
         {
-            TouchPhase phase = Input.GetTouch(i).phase;
+            Touch touch = Input.GetTouch(i);
+            if (GameSettingsMenu.BlocksJumpInput(touch.position, touch.phase))
+            {
+                continue;
+            }
+
+            TouchPhase phase = touch.phase;
             if (phase != TouchPhase.Ended && phase != TouchPhase.Canceled)
             {
                 return true;

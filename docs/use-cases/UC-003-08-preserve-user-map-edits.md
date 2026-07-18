@@ -1,7 +1,7 @@
 # UC-003-08: 코드 수정 중 사용자 맵 구성 보존
 
 - 상태: Implemented
-- 마지막 갱신일: 2026-06-23
+- 마지막 갱신일: 2026-07-17
 
 ## 목적
 
@@ -31,6 +31,7 @@
 6. 샘플 씬 재생성 도구는 기존 맵을 덮어쓰기 전에 명시적인 사용자 확인을 요구한다.
 7. 사용자가 전날 만든 맵 구조물이 사라졌다고 보고하면 코드 수정자는 최신 백업 씬과 메인 씬을 비교해 더 완전한 맵 구성을 복구한다.
 8. 복구 후 시스템은 샘플 씬 재생성이나 자동 로딩이 사용자의 기존 맵을 조용히 덮어쓰지 않도록 방지한다.
+9. 사용자가 특정 불필요 충돌 오브젝트 삭제를 요청하면 코드 수정자는 같은 이름의 가이드와 실제 Collider를 구분하고, 위치·크기·계층을 확인한 대상만 제거한다.
 
 ## 대안 및 예외 흐름
 
@@ -38,6 +39,7 @@
 - 6a. Play Mode이면 샘플 씬 재생성 도구는 실행되지 않고 Edit Mode에서 다시 실행하라고 안내한다.
 - 7a. 복구 후보가 여러 개이면 코드 수정자는 Platform 개수, 삼각형 Platform 포함 여부, 파일 수정 시각을 비교해 복구 대상을 선택한다.
 - 7b. 복구 후보가 현재 씬보다 불완전하면 코드 수정자는 메인 씬을 교체하지 않고 원인을 보고한다.
+- 9a. 대상이 정상 플랫폼 Collider 자체이거나 삭제 범위가 불명확하면 코드 수정자는 주변 중복 Collider와 시각 Bounds를 추가 확인한 뒤 작업한다.
 
 ## 인수 조건
 
@@ -48,6 +50,7 @@
 - [ ] 백업 씬에 더 완전한 사용자 맵 구성이 있으면 메인 씬으로 복구할 수 있다.
 - [ ] 복구 대상 백업에 포함된 삼각형 Platform은 도형, 꼭지점, 자식 시각 오브젝트와 충돌체 정보를 함께 유지한다.
 - [ ] 샘플 씬 자동 생성/자동 열기 동작은 사용자의 기존 맵 구성을 조용히 대체하지 않는다.
+- [x] 명시적으로 요청된 불필요 충돌을 제거할 때 같은 이름의 `CollisionGuides` 및 주변 정상 Collider는 보존된다.
 
 ## 구현 메모
 
@@ -61,6 +64,12 @@
 - 2026-06-23 `MapSceneBackupUtility`를 추가해 Play Mode 진입 직전 더티 맵 씬을 `Assets/_Recovery/MapSceneBackups`에 사본으로 저장하게 했다.
 - 2026-06-23 `MVPSceneBuilder.BuildMVPScene`이 배치 모드에서 기존 `Assets/Scenes/MVPJumpScene.unity`를 조용히 덮어쓰지 못하도록 막았다. 명시 인자 `-jumpTimingAllowSceneOverwrite`가 있을 때만 허용한다.
 - 2026-06-23 `Build MVP Scene` 배치 실행 시 기존 씬 해시가 유지되고 덮어쓰기가 건너뛰어지는 것을 확인했다.
+- 2026-07-01 사용자가 `Obstacle_horn` 2개가 사라졌다고 보고해 `Assets/_Recovery/MapSceneBackups/MVPJumpScene-20260627_201534-before-play.unity`와 메인 씬을 비교했다.
+- 2026-07-01 백업에만 남아 있던 `Obstacle_horn (8)`과 `Obstacle_horn (9)`의 prefab instance 및 `SceneRoots` fileID를 `Assets/Scenes/MVPJumpScene.unity`에 복구했다.
+- 2026-07-01 텍스트 검증으로 메인 씬의 `Obstacle_horn` 항목 10개와 복구한 두 루트 fileID를 확인했다. Unity 에디터 실행 검증은 수행하지 않았다.
+- 2026-07-17 `Platform_01 (11)` 위의 불필요 충돌 보고를 조사해, 별도 중복 Collider가 아니라 실제 `BoxCollider2D` 높이 `8.645620`이 가이드 높이 `7.612145`보다 큰 상태임을 확인했다.
+- `Stage1/Collision/Platform_01 (11)`의 Collider 높이만 `7.6121454`로 맞춰 위·아래의 보이지 않는 돌출 구간을 제거했다. 같은 이름의 `CollisionGuides`, Transform, Collider 중심·너비와 주변 Collider는 유지했다.
+- 수정 직전 백업 `MVPJumpScene-20260717_205800-before-play.unity`와 메인 씬을 비교해 `Platform_01 (11)`의 `BoxCollider2D.m_Size.y` 한 값만 변경됐음을 확인했다. Unity에서 수정 후 Collider Bounds와 가이드 Bounds가 일치하는 것도 직접 검증했다.
 
 ## 미결 질문
 

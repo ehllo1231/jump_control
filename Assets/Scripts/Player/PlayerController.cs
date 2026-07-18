@@ -192,6 +192,7 @@ public partial class PlayerController : MonoBehaviour
         }
 
         powerGauge.TickGauge(Time.deltaTime);
+        GameHaptics.TickChargingFeedback(Time.deltaTime);
     }
 
     private void UpdateJumping(bool grounded)
@@ -211,6 +212,7 @@ public partial class PlayerController : MonoBehaviour
         {
             if (currentJumpWasExecuted)
             {
+                GameHaptics.PlayLanding();
                 Landed?.Invoke(this);
             }
 
@@ -222,6 +224,7 @@ public partial class PlayerController : MonoBehaviour
     {
         currentState = PlayerJumpState.ChargingPower;
         powerGauge.BeginGauge();
+        GameHaptics.StartChargingFeedback();
         playerVisual.SetState(currentState);
     }
 
@@ -235,6 +238,7 @@ public partial class PlayerController : MonoBehaviour
 
         powerGauge.Hide();
         angleAim.BeginAim();
+        GameHaptics.PlayFirstPress();
         playerVisual.SetState(currentState);
     }
 
@@ -247,6 +251,8 @@ public partial class PlayerController : MonoBehaviour
         lastJumpAngle = lockedJumpAngle;
         SaveDebugJumpReturnPosition();
         lastJumpVector = jumpMotor.Jump(lockedPower, direction);
+        GameHaptics.StopChargingFeedback();
+        GameHaptics.PlayJumpExecuted(GetLockedPowerNormalized());
 
         powerGauge.Hide();
         angleAim.Hide();
@@ -263,6 +269,7 @@ public partial class PlayerController : MonoBehaviour
 
     private void CancelPreparationAndWaitForLanding()
     {
+        GameHaptics.StopChargingFeedback();
         powerGauge.Hide();
         angleAim.Hide();
 
@@ -274,6 +281,7 @@ public partial class PlayerController : MonoBehaviour
 
     private void EnterIdle()
     {
+        GameHaptics.StopChargingFeedback();
         currentState = PlayerJumpState.Idle;
         lockedPower = 0f;
         lockedJumpAngle = 0f;
@@ -327,6 +335,23 @@ public partial class PlayerController : MonoBehaviour
         {
             body = GetComponent<Rigidbody2D>();
         }
+    }
+
+    private float GetLockedPowerNormalized()
+    {
+        if (jumpTuning == null)
+        {
+            return 1f;
+        }
+
+        float minPower = jumpTuning.MinimumJumpPower;
+        float maxPower = jumpTuning.MaximumJumpPower;
+        if (Mathf.Approximately(minPower, maxPower))
+        {
+            return 1f;
+        }
+
+        return Mathf.InverseLerp(minPower, maxPower, lockedPower);
     }
 
     private void ApplyJumpTuning()
