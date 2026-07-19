@@ -640,7 +640,7 @@ public sealed class StageCaptureWindow : EditorWindow
         unchecked
         {
             int hash = 17;
-            hash = hash * 31 + (int)plan.Scene.handle.GetRawData();
+            hash = hash * 31 + plan.Scene.handle.GetHashCode();
             hash = hash * 31 + plan.SourceCamera.GetEntityId().GetHashCode();
             hash = hash * 31 + plan.SourceCamera.cullingMask;
             hash = hash * 31 + (int)plan.SourceCamera.clearFlags;
