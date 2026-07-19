@@ -178,7 +178,7 @@ public sealed class StageCaptureWindow : EditorWindow
         {
             if (GUILayout.Button("Capture Stage PNG(s)...", GUILayout.Height(38f)))
             {
-                Capture(plan, sections);
+                ScheduleCapture(plan, sections);
             }
         }
 
@@ -663,6 +663,23 @@ public sealed class StageCaptureWindow : EditorWindow
         EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), borderColor);
         EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1f, rect.height), borderColor);
         EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), borderColor);
+    }
+
+    private void ScheduleCapture(
+        StageCapturePlan plan,
+        StageCaptureSection[] sections)
+    {
+        StageCaptureSection[] sectionSnapshot =
+            (StageCaptureSection[])sections.Clone();
+        EditorApplication.delayCall += () =>
+        {
+            if (this == null)
+            {
+                return;
+            }
+
+            Capture(plan, sectionSnapshot);
+        };
     }
 
     private void Capture(

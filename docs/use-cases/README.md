@@ -49,5 +49,5 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 | UC-008-01 | Android 진동 피드백 | In Progress | [문서](./UC-008-01-android-haptic-feedback.md) | 2026-07-06 |
 | UC-008-02 | 진동 설정 전환 | Implemented | [문서](./UC-008-02-toggle-vibration-setting.md) | 2026-07-12 |
 | UC-009-01 | 게임 내 설정 메뉴 열기 | Implemented | [문서](./UC-009-01-open-in-game-settings-menu.md) | 2026-07-12 |
-| UC-010-01 | 스테이지 전체를 세로 고화질 이미지로 저장 | Verified | [문서](./UC-010-01-capture-stage-as-portrait-image.md) | 2026-07-19 |
-| UC-010-02 | 스테이지 캡처를 세로 구간별 이미지로 저장 | Verified | [문서](./UC-010-02-save-stage-as-vertical-sections.md) | 2026-07-19 |
+| UC-010-01 | 스테이지 전체를 세로 고화질 이미지로 저장 | Implemented | [문서](./UC-010-01-capture-stage-as-portrait-image.md) | 2026-07-19 |
+| UC-010-02 | 스테이지 캡처를 세로 구간별 이미지로 저장 | Implemented | [문서](./UC-010-02-save-stage-as-vertical-sections.md) | 2026-07-19 |
