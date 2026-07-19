@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using Unity.Collections;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -14,22 +15,35 @@ public sealed class StageCaptureWindow : EditorWindow
     private const int DefaultOutputWidth = 2160;
     private const int DefaultTileHeight = 2048;
     private const float DefaultPadding = 0.5f;
+    private const int MaximumPreviewWidth = 512;
+    private const int MaximumPreviewHeight = 4096;
+    private const int DividerControlHint = 0x53CA71;
     private const string LastSaveDirectoryKey = "JumpTiming.StageCapture.LastSaveDirectory";
 
     [SerializeField] private Camera sourceCamera;
     [SerializeField] private Transform contentRoot;
     [SerializeField] private int outputWidth = DefaultOutputWidth;
-    [SerializeField] private int verticalSectionCount = 1;
+    [SerializeField, HideInInspector] private int verticalSectionCount = 1;
+    [SerializeField] private List<float> dividerPositions = new List<float>();
+    [SerializeField] private Vector2 windowScrollPosition;
+    [SerializeField] private int selectedDividerIndex = -1;
     [SerializeField] private int tileHeight = DefaultTileHeight;
     [SerializeField] private int antiAliasing = 4;
     [SerializeField] private float padding = DefaultPadding;
     [SerializeField] private bool revealAfterCapture = true;
 
+    [NonSerialized] private Texture2D previewTexture;
+    [NonSerialized] private bool previewDirty = true;
+    [NonSerialized] private int previewPlanSignature = int.MinValue;
+    [NonSerialized] private int previewAttemptedSignature = int.MinValue;
+    [NonSerialized] private string previewError = string.Empty;
+    [NonSerialized] private bool suppressPreviewInvalidation;
+
     [MenuItem("Tools/Jump Timing/Stage Capture", false, 70)]
     public static void OpenWindow()
     {
         StageCaptureWindow window = GetWindow<StageCaptureWindow>("Stage Capture");
-        window.minSize = new Vector2(430f, 500f);
+        window.minSize = new Vector2(520f, 600f);
         window.Show();
     }
 
@@ -45,60 +59,76 @@ public sealed class StageCaptureWindow : EditorWindow
             contentRoot = FindDefaultContentRoot();
         }
 
-        EditorApplication.hierarchyChanged += Repaint;
+        if (dividerPositions == null)
+        {
+            dividerPositions = new List<float>();
+        }
+
+        MigrateLegacySectionCount();
+        EditorApplication.hierarchyChanged += MarkPreviewDirty;
+        EditorApplication.projectChanged += MarkPreviewDirty;
+        EditorSceneManager.sceneDirtied += HandleSceneDirtied;
+        Undo.undoRedoPerformed += MarkPreviewDirty;
     }
 
     private void OnDisable()
     {
-        EditorApplication.hierarchyChanged -= Repaint;
+        EditorApplication.hierarchyChanged -= MarkPreviewDirty;
+        EditorApplication.projectChanged -= MarkPreviewDirty;
+        EditorSceneManager.sceneDirtied -= HandleSceneDirtied;
+        Undo.undoRedoPerformed -= MarkPreviewDirty;
+        DestroyPreviewTexture();
     }
 
     private void OnGUI()
     {
+        windowScrollPosition = EditorGUILayout.BeginScrollView(windowScrollPosition);
         EditorGUILayout.Space(8f);
         EditorGUILayout.LabelField("Stage Portrait Capture", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
-            "현재 열린 2D 스테이지의 활성 Renderer 범위를 자동으로 계산하고, 전체 세로 길이를 원하는 개수의 고해상도 PNG로 저장합니다.",
+            "현재 열린 2D 스테이지를 미리보고, 분할선을 직접 배치해 하나 이상의 고해상도 PNG로 저장합니다.",
             MessageType.Info);
 
         EditorGUILayout.Space(6f);
+        EditorGUI.BeginChangeCheck();
         sourceCamera = EditorGUILayout.ObjectField(
             "Source Camera",
             sourceCamera,
             typeof(Camera),
             true) as Camera;
-
-        if (GUILayout.Button("Use Active Scene Camera"))
-        {
-            sourceCamera = FindDefaultCamera();
-        }
-
         contentRoot = EditorGUILayout.ObjectField(
             "Content Root (Optional)",
             contentRoot,
             typeof(Transform),
             true) as Transform;
 
+        outputWidth = Mathf.Max(256, EditorGUILayout.IntField("PNG Width", outputWidth));
+        padding = Mathf.Max(0f, EditorGUILayout.FloatField("World Padding", padding));
+        tileHeight = Mathf.Max(256, EditorGUILayout.IntField("Render Tile Height", tileHeight));
+        antiAliasing = DrawAntiAliasingPopup(antiAliasing);
+        if (EditorGUI.EndChangeCheck())
+        {
+            MarkPreviewDirty();
+        }
+
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("Use Active Scene Camera"))
+        {
+            sourceCamera = FindDefaultCamera();
+            MarkPreviewDirty();
+        }
+
         if (GUILayout.Button("Auto Detect Content Root"))
         {
             contentRoot = FindDefaultContentRoot();
+            MarkPreviewDirty();
         }
+        EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.HelpBox(
             "Content Root는 이미지 영역만 결정합니다. 자동 선택된 배경 루트를 사용하면 멀리 떨어진 안전용 바닥은 제외하면서, 영역 안의 Platform과 Player는 함께 렌더링됩니다.",
             MessageType.None);
 
-        EditorGUILayout.Space(6f);
-        outputWidth = Mathf.Max(256, EditorGUILayout.IntField("PNG Width", outputWidth));
-        verticalSectionCount = Mathf.Max(
-            1,
-            EditorGUILayout.IntField("Vertical Sections", verticalSectionCount));
-        EditorGUILayout.HelpBox(
-            "1이면 전체를 한 장으로 저장합니다. 2 이상이면 전체 세로 길이를 위에서 아래 순서로 나눠 저장합니다.",
-            MessageType.None);
-        padding = Mathf.Max(0f, EditorGUILayout.FloatField("World Padding", padding));
-        tileHeight = Mathf.Max(256, EditorGUILayout.IntField("Render Tile Height", tileHeight));
-        antiAliasing = DrawAntiAliasingPopup(antiAliasing);
         revealAfterCapture = EditorGUILayout.Toggle("Reveal After Capture", revealAfterCapture);
 
         EditorGUILayout.Space(10f);
@@ -112,28 +142,43 @@ public sealed class StageCaptureWindow : EditorWindow
             out StageCapturePlan plan,
             out string error);
 
-        bool hasValidSectionCount = hasPlan && verticalSectionCount <= plan.Height;
+        StageCaptureSection[] sections = Array.Empty<StageCaptureSection>();
+        bool canCapture = false;
         if (hasPlan)
         {
-            DrawPlanSummary(plan, verticalSectionCount);
-            if (!hasValidSectionCount)
+            SanitizeDividerPositions(plan.Height);
+            int currentPlanSignature = GetPlanSignature(plan);
+            if (previewPlanSignature != currentPlanSignature)
             {
-                EditorGUILayout.HelpBox(
-                    $"Vertical Sections는 전체 이미지 높이({plan.Height:N0}px) 이하여야 합니다.",
-                    MessageType.Warning);
+                previewDirty = true;
             }
+
+            if (previewAttemptedSignature != currentPlanSignature &&
+                Event.current.type == EventType.Layout)
+            {
+                RefreshPreview(plan, currentPlanSignature);
+            }
+
+            sections = StageCaptureUtility.CreateSections(plan.Height, dividerPositions);
+            DrawPlanSummary(plan, sections);
+            DrawDividerToolbar(plan, currentPlanSignature);
+            sections = StageCaptureUtility.CreateSections(plan.Height, dividerPositions);
+            DrawCapturePreview(plan, sections);
+            canCapture = previewTexture != null && !previewDirty;
         }
         else
         {
+            DestroyPreviewTexture();
+            previewAttemptedSignature = int.MinValue;
             EditorGUILayout.HelpBox(error, MessageType.Warning);
         }
 
         EditorGUILayout.Space(8f);
-        using (new EditorGUI.DisabledScope(!hasValidSectionCount))
+        using (new EditorGUI.DisabledScope(!canCapture))
         {
             if (GUILayout.Button("Capture Stage PNG(s)...", GUILayout.Height(38f)))
             {
-                Capture(plan, verticalSectionCount);
+                Capture(plan, sections);
             }
         }
 
@@ -141,6 +186,7 @@ public sealed class StageCaptureWindow : EditorWindow
         EditorGUILayout.HelpBox(
             "Screen Space - Overlay Canvas와 Scene View의 편집용 선/아이콘은 카메라 이미지에 포함되지 않습니다.",
             MessageType.None);
+        EditorGUILayout.EndScrollView();
     }
 
     private static int DrawAntiAliasingPopup(int currentValue)
@@ -152,28 +198,31 @@ public sealed class StageCaptureWindow : EditorWindow
         return values[EditorGUILayout.Popup("Anti Aliasing", currentIndex, labels)];
     }
 
-    private static void DrawPlanSummary(StageCapturePlan plan, int sectionCount)
+    private static void DrawPlanSummary(
+        StageCapturePlan plan,
+        IReadOnlyList<StageCaptureSection> sections)
     {
         double imageMemoryMegabytes = plan.Width * (double)plan.Height * 3d / (1024d * 1024d);
-        EditorGUILayout.LabelField("Capture Preview", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Capture Plan", EditorStyles.boldLabel);
         EditorGUILayout.LabelField("Active Scene", plan.Scene.name);
         EditorGUILayout.LabelField("Included Renderers", plan.RendererCount.ToString("N0"));
         EditorGUILayout.LabelField("World Size", $"{plan.Area.width:F2} × {plan.Area.height:F2}");
         EditorGUILayout.LabelField("Full Resolution", $"{plan.Width:N0} × {plan.Height:N0}");
-        EditorGUILayout.LabelField("Output Files", sectionCount.ToString("N0"));
-        if (sectionCount <= plan.Height)
+        EditorGUILayout.LabelField("Output Files", sections.Count.ToString("N0"));
+
+        int minimumSectionHeight = int.MaxValue;
+        int maximumSectionHeight = 0;
+        for (int i = 0; i < sections.Count; i++)
         {
-            int maximumSectionHeight = StageCaptureUtility.GetSectionHeight(
-                plan.Height,
-                sectionCount,
-                0);
-            int minimumSectionHeight = plan.Height / sectionCount;
-            EditorGUILayout.LabelField(
-                "Section Resolution",
-                minimumSectionHeight == maximumSectionHeight
-                    ? $"{plan.Width:N0} × {minimumSectionHeight:N0}"
-                    : $"{plan.Width:N0} × {minimumSectionHeight:N0}~{maximumSectionHeight:N0}");
+            minimumSectionHeight = Mathf.Min(minimumSectionHeight, sections[i].Height);
+            maximumSectionHeight = Mathf.Max(maximumSectionHeight, sections[i].Height);
         }
+
+        EditorGUILayout.LabelField(
+            "Section Resolution",
+            minimumSectionHeight == maximumSectionHeight
+                ? $"{plan.Width:N0} × {minimumSectionHeight:N0}"
+                : $"{plan.Width:N0} × {minimumSectionHeight:N0}~{maximumSectionHeight:N0}");
         EditorGUILayout.LabelField("Image Buffer", $"약 {imageMemoryMegabytes:F1} MB");
 
         if (plan.Height > plan.Width)
@@ -188,7 +237,437 @@ public sealed class StageCaptureWindow : EditorWindow
         }
     }
 
-    private void Capture(StageCapturePlan plan, int sectionCount)
+    private void DrawDividerToolbar(StageCapturePlan plan, int currentPlanSignature)
+    {
+        EditorGUILayout.Space(6f);
+        EditorGUILayout.LabelField("Stage Preview", EditorStyles.boldLabel);
+        EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
+
+        using (new EditorGUI.DisabledScope(dividerPositions.Count >= plan.Height - 1))
+        {
+            if (GUILayout.Button(
+                    new GUIContent("Add Divider", "가장 큰 구간의 가운데에 분할선을 추가합니다."),
+                    EditorStyles.toolbarButton))
+            {
+                AddDivider(plan.Height);
+            }
+        }
+
+        using (new EditorGUI.DisabledScope(
+                   selectedDividerIndex < 0 || selectedDividerIndex >= dividerPositions.Count))
+        {
+            if (GUILayout.Button(
+                    new GUIContent("Delete", "선택한 분할선을 삭제합니다."),
+                    EditorStyles.toolbarButton))
+            {
+                dividerPositions.RemoveAt(selectedDividerIndex);
+                selectedDividerIndex = Mathf.Min(
+                    selectedDividerIndex,
+                    dividerPositions.Count - 1);
+            }
+        }
+
+        using (new EditorGUI.DisabledScope(dividerPositions.Count == 0))
+        {
+            if (GUILayout.Button(
+                    new GUIContent("Even Spacing", "현재 구간들을 같은 높이로 배치합니다."),
+                    EditorStyles.toolbarButton))
+            {
+                EvenlySpaceDividers(plan.Height);
+            }
+
+            if (GUILayout.Button(
+                    new GUIContent("Reset", "모든 분할선을 제거합니다."),
+                    EditorStyles.toolbarButton))
+            {
+                dividerPositions.Clear();
+                selectedDividerIndex = -1;
+            }
+        }
+
+        GUILayout.FlexibleSpace();
+        if (GUILayout.Button(
+                new GUIContent("Refresh", "현재 씬으로 미리보기를 다시 렌더링합니다."),
+                EditorStyles.toolbarButton))
+        {
+            RefreshPreview(plan, currentPlanSignature);
+        }
+
+        EditorGUILayout.EndHorizontal();
+    }
+
+    private void DrawCapturePreview(
+        StageCapturePlan plan,
+        IReadOnlyList<StageCaptureSection> sections)
+    {
+        if (!string.IsNullOrEmpty(previewError))
+        {
+            EditorGUILayout.HelpBox(previewError, MessageType.Error);
+        }
+
+        if (previewTexture == null)
+        {
+            EditorGUILayout.HelpBox("스테이지 미리보기를 준비하고 있습니다.", MessageType.Info);
+            return;
+        }
+
+        if (previewDirty)
+        {
+            EditorGUILayout.HelpBox(
+                "씬 또는 캡처 설정이 변경되었습니다. 미리보기를 갱신하세요.",
+                MessageType.Warning);
+        }
+
+        float displayWidth = Mathf.Clamp(
+            position.width - 42f,
+            240f,
+            MaximumPreviewWidth);
+        float displayHeight = displayWidth * previewTexture.height / previewTexture.width;
+
+        EditorGUILayout.BeginHorizontal();
+        GUILayout.FlexibleSpace();
+        Rect previewRect = GUILayoutUtility.GetRect(
+            displayWidth,
+            displayHeight,
+            GUILayout.Width(displayWidth),
+            GUILayout.Height(displayHeight));
+        GUILayout.FlexibleSpace();
+        EditorGUILayout.EndHorizontal();
+
+        GUI.DrawTexture(previewRect, previewTexture, ScaleMode.StretchToFill, false);
+        DrawSectionOverlays(previewRect, plan, sections);
+        HandleDividerInput(previewRect, plan.Height);
+        DrawPreviewBorder(previewRect);
+    }
+
+    private void DrawSectionOverlays(
+        Rect previewRect,
+        StageCapturePlan plan,
+        IReadOnlyList<StageCaptureSection> sections)
+    {
+        GUIStyle labelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
+        {
+            alignment = TextAnchor.MiddleLeft
+        };
+        labelStyle.normal.textColor = Color.white;
+
+        for (int i = 0; i < sections.Count; i++)
+        {
+            StageCaptureSection section = sections[i];
+            float sectionTop = previewRect.y +
+                               previewRect.height * section.TopPixelOffset / plan.Height;
+            float sectionHeight = previewRect.height * section.Height / plan.Height;
+            Rect sectionRect = new Rect(
+                previewRect.x,
+                sectionTop,
+                previewRect.width,
+                sectionHeight);
+            Color tint = i % 2 == 0
+                ? new Color(0.05f, 0.65f, 1f, 0.06f)
+                : new Color(1f, 0.65f, 0.05f, 0.05f);
+            EditorGUI.DrawRect(sectionRect, tint);
+
+            if (sectionRect.height < 18f)
+            {
+                continue;
+            }
+
+            string label = $"Part {i + 1:D2}  {plan.Width:N0} × {section.Height:N0}";
+            float labelWidth = Mathf.Min(230f, previewRect.width - 12f);
+            Rect labelRect = new Rect(
+                previewRect.x + 6f,
+                sectionRect.y + 4f,
+                labelWidth,
+                18f);
+            EditorGUI.DrawRect(labelRect, new Color(0f, 0f, 0f, 0.58f));
+            GUI.Label(labelRect, label, labelStyle);
+        }
+
+        for (int i = 0; i < dividerPositions.Count; i++)
+        {
+            float lineY = previewRect.y + previewRect.height * dividerPositions[i];
+            bool isSelected = i == selectedDividerIndex;
+            Color lineColor = isSelected
+                ? new Color(1f, 0.78f, 0.1f, 1f)
+                : new Color(0.1f, 0.85f, 1f, 1f);
+            EditorGUI.DrawRect(
+                new Rect(previewRect.x, lineY - 1f, previewRect.width, 2f),
+                lineColor);
+
+            Rect handleRect = new Rect(
+                previewRect.xMax - 18f,
+                lineY - 8f,
+                18f,
+                16f);
+            EditorGUI.DrawRect(handleRect, lineColor);
+            GUI.Label(handleRect, "=", EditorStyles.centeredGreyMiniLabel);
+            EditorGUIUtility.AddCursorRect(
+                new Rect(previewRect.x, lineY - 6f, previewRect.width, 12f),
+                MouseCursor.ResizeVertical);
+        }
+    }
+
+    private void HandleDividerInput(Rect previewRect, int totalPixelHeight)
+    {
+        int controlId = GUIUtility.GetControlID(
+            DividerControlHint,
+            FocusType.Passive,
+            previewRect);
+        Event currentEvent = Event.current;
+
+        if (currentEvent.type == EventType.MouseDown &&
+            currentEvent.button == 0 &&
+            previewRect.Contains(currentEvent.mousePosition))
+        {
+            int hitDivider = FindDividerAt(previewRect, currentEvent.mousePosition.y);
+            selectedDividerIndex = hitDivider;
+            if (hitDivider >= 0)
+            {
+                GUIUtility.hotControl = controlId;
+                currentEvent.Use();
+            }
+
+            Repaint();
+        }
+        else if (currentEvent.type == EventType.MouseDrag &&
+                 GUIUtility.hotControl == controlId &&
+                 selectedDividerIndex >= 0 &&
+                 selectedDividerIndex < dividerPositions.Count)
+        {
+            float onePixel = 1f / totalPixelHeight;
+            float minimum = selectedDividerIndex == 0
+                ? onePixel
+                : dividerPositions[selectedDividerIndex - 1] + onePixel;
+            float maximum = selectedDividerIndex == dividerPositions.Count - 1
+                ? 1f - onePixel
+                : dividerPositions[selectedDividerIndex + 1] - onePixel;
+            float normalizedPosition = Mathf.InverseLerp(
+                previewRect.y,
+                previewRect.yMax,
+                currentEvent.mousePosition.y);
+            dividerPositions[selectedDividerIndex] = Mathf.Clamp(
+                normalizedPosition,
+                minimum,
+                maximum);
+            SanitizeDividerPositions(totalPixelHeight);
+            currentEvent.Use();
+            Repaint();
+        }
+        else if (currentEvent.type == EventType.MouseUp &&
+                 GUIUtility.hotControl == controlId)
+        {
+            GUIUtility.hotControl = 0;
+            currentEvent.Use();
+        }
+        else if (currentEvent.type == EventType.KeyDown &&
+                 selectedDividerIndex >= 0 &&
+                 selectedDividerIndex < dividerPositions.Count &&
+                 (currentEvent.keyCode == KeyCode.Delete ||
+                  currentEvent.keyCode == KeyCode.Backspace))
+        {
+            dividerPositions.RemoveAt(selectedDividerIndex);
+            selectedDividerIndex = Mathf.Min(
+                selectedDividerIndex,
+                dividerPositions.Count - 1);
+            currentEvent.Use();
+            Repaint();
+        }
+    }
+
+    private int FindDividerAt(Rect previewRect, float mouseY)
+    {
+        int nearestIndex = -1;
+        float nearestDistance = 7f;
+        for (int i = 0; i < dividerPositions.Count; i++)
+        {
+            float dividerY = previewRect.y + previewRect.height * dividerPositions[i];
+            float distance = Mathf.Abs(mouseY - dividerY);
+            if (distance <= nearestDistance)
+            {
+                nearestDistance = distance;
+                nearestIndex = i;
+            }
+        }
+
+        return nearestIndex;
+    }
+
+    private void AddDivider(int totalPixelHeight)
+    {
+        StageCaptureSection[] sections = StageCaptureUtility.CreateSections(
+            totalPixelHeight,
+            dividerPositions);
+        int largestSectionIndex = 0;
+        for (int i = 1; i < sections.Length; i++)
+        {
+            if (sections[i].Height > sections[largestSectionIndex].Height)
+            {
+                largestSectionIndex = i;
+            }
+        }
+
+        StageCaptureSection largestSection = sections[largestSectionIndex];
+        if (largestSection.Height < 2)
+        {
+            return;
+        }
+
+        float dividerPosition =
+            (largestSection.TopPixelOffset + largestSection.Height * 0.5f) /
+            totalPixelHeight;
+        dividerPositions.Add(dividerPosition);
+        dividerPositions.Sort();
+        selectedDividerIndex = dividerPositions.IndexOf(dividerPosition);
+        SanitizeDividerPositions(totalPixelHeight);
+    }
+
+    private void EvenlySpaceDividers(int totalPixelHeight)
+    {
+        int sectionCount = dividerPositions.Count + 1;
+        for (int i = 0; i < dividerPositions.Count; i++)
+        {
+            dividerPositions[i] = (i + 1f) / sectionCount;
+        }
+
+        SanitizeDividerPositions(totalPixelHeight);
+    }
+
+    private void SanitizeDividerPositions(int totalPixelHeight)
+    {
+        dividerPositions.Sort();
+        int maximumDividerCount = Mathf.Max(0, totalPixelHeight - 1);
+        if (dividerPositions.Count > maximumDividerCount)
+        {
+            dividerPositions.RemoveRange(
+                maximumDividerCount,
+                dividerPositions.Count - maximumDividerCount);
+        }
+
+        StageCaptureSection[] sections = StageCaptureUtility.CreateSections(
+            totalPixelHeight,
+            dividerPositions);
+        dividerPositions.Clear();
+        int cumulativeHeight = 0;
+        for (int i = 0; i < sections.Length - 1; i++)
+        {
+            cumulativeHeight += sections[i].Height;
+            dividerPositions.Add(cumulativeHeight / (float)totalPixelHeight);
+        }
+
+        selectedDividerIndex = Mathf.Clamp(
+            selectedDividerIndex,
+            -1,
+            dividerPositions.Count - 1);
+    }
+
+    private void MigrateLegacySectionCount()
+    {
+        if (dividerPositions.Count == 0 && verticalSectionCount > 1)
+        {
+            int migratedSectionCount = Mathf.Clamp(verticalSectionCount, 1, 256);
+            for (int i = 1; i < migratedSectionCount; i++)
+            {
+                dividerPositions.Add(i / (float)migratedSectionCount);
+            }
+        }
+
+        verticalSectionCount = 1;
+    }
+
+    private void HandleSceneDirtied(Scene scene)
+    {
+        if (scene == SceneManager.GetActiveScene())
+        {
+            MarkPreviewDirty();
+        }
+    }
+
+    private void MarkPreviewDirty()
+    {
+        if (suppressPreviewInvalidation)
+        {
+            return;
+        }
+
+        previewDirty = true;
+        previewAttemptedSignature = int.MinValue;
+        Repaint();
+    }
+
+    private void RefreshPreview(StageCapturePlan plan, int planSignature)
+    {
+        previewAttemptedSignature = planSignature;
+        previewError = string.Empty;
+        DestroyPreviewTexture();
+
+        suppressPreviewInvalidation = true;
+        try
+        {
+            previewTexture = StageCaptureUtility.RenderPreview(
+                plan,
+                MaximumPreviewWidth,
+                MaximumPreviewHeight);
+            previewPlanSignature = planSignature;
+            previewDirty = false;
+        }
+        catch (Exception exception)
+        {
+            previewError = $"미리보기 렌더링에 실패했습니다. Console을 확인하세요.\n{exception.Message}";
+            Debug.LogException(exception);
+        }
+        finally
+        {
+            suppressPreviewInvalidation = false;
+            previewAttemptedSignature = planSignature;
+        }
+
+        Repaint();
+    }
+
+    private void DestroyPreviewTexture()
+    {
+        if (previewTexture != null)
+        {
+            DestroyImmediate(previewTexture);
+            previewTexture = null;
+        }
+
+        previewPlanSignature = int.MinValue;
+    }
+
+    private static int GetPlanSignature(StageCapturePlan plan)
+    {
+        unchecked
+        {
+            int hash = 17;
+            hash = hash * 31 + (int)plan.Scene.handle.GetRawData();
+            hash = hash * 31 + plan.SourceCamera.GetEntityId().GetHashCode();
+            hash = hash * 31 + plan.SourceCamera.cullingMask;
+            hash = hash * 31 + (int)plan.SourceCamera.clearFlags;
+            hash = hash * 31 + plan.SourceCamera.backgroundColor.GetHashCode();
+            hash = hash * 31 + plan.SourceCamera.transform.localToWorldMatrix.GetHashCode();
+            hash = hash * 31 + plan.Area.GetHashCode();
+            hash = hash * 31 + plan.Width;
+            hash = hash * 31 + plan.Height;
+            hash = hash * 31 + plan.TileHeight;
+            hash = hash * 31 + plan.AntiAliasing;
+            hash = hash * 31 + plan.RendererCount;
+            return hash;
+        }
+    }
+
+    private static void DrawPreviewBorder(Rect rect)
+    {
+        Color borderColor = new Color(0f, 0f, 0f, 0.8f);
+        EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), borderColor);
+        EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), borderColor);
+        EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1f, rect.height), borderColor);
+        EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), borderColor);
+    }
+
+    private void Capture(
+        StageCapturePlan plan,
+        IReadOnlyList<StageCaptureSection> sections)
     {
         string sceneName = string.IsNullOrEmpty(plan.Scene.name) ? "Stage" : plan.Scene.name;
         string baseFileName = $"{sceneName}-portrait-{DateTime.Now:yyyyMMdd-HHmmss}";
@@ -214,7 +693,7 @@ public sealed class StageCaptureWindow : EditorWindow
                     plan,
                     selectedDirectory,
                     baseFileName,
-                    sectionCount,
+                    sections,
                     out string[] outputPaths))
             {
                 Debug.Log("Stage capture cancelled.");
@@ -236,11 +715,13 @@ public sealed class StageCaptureWindow : EditorWindow
                 EditorUtility.RevealInFinder(outputPaths[0]);
             }
 
-            int minimumSectionHeight = plan.Height / outputPaths.Length;
-            int maximumSectionHeight = StageCaptureUtility.GetSectionHeight(
-                plan.Height,
-                outputPaths.Length,
-                0);
+            int minimumSectionHeight = int.MaxValue;
+            int maximumSectionHeight = 0;
+            for (int i = 0; i < sections.Count; i++)
+            {
+                minimumSectionHeight = Mathf.Min(minimumSectionHeight, sections[i].Height);
+                maximumSectionHeight = Mathf.Max(maximumSectionHeight, sections[i].Height);
+            }
             string sectionHeightLabel = minimumSectionHeight == maximumSectionHeight
                 ? minimumSectionHeight.ToString("N0")
                 : $"{minimumSectionHeight:N0}~{maximumSectionHeight:N0}";
@@ -381,6 +862,19 @@ internal readonly struct StageCapturePlan
     public int RendererCount { get; }
 }
 
+internal readonly struct StageCaptureSection
+{
+    public StageCaptureSection(int topPixelOffset, int height)
+    {
+        TopPixelOffset = topPixelOffset;
+        Height = height;
+    }
+
+    public int TopPixelOffset { get; }
+    public int Height { get; }
+    public int EndPixelOffset => TopPixelOffset + Height;
+}
+
 internal static class StageCaptureUtility
 {
     private const float MinimumWorldSize = 0.001f;
@@ -514,6 +1008,104 @@ internal static class StageCaptureUtility
         return true;
     }
 
+    public static StageCaptureSection[] CreateSections(
+        int totalPixelHeight,
+        IReadOnlyList<float> normalizedDividerPositions)
+    {
+        if (totalPixelHeight < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(totalPixelHeight));
+        }
+
+        int dividerCount = normalizedDividerPositions?.Count ?? 0;
+        if (dividerCount >= totalPixelHeight)
+        {
+            throw new ArgumentException(
+                "Divider count must leave at least one pixel in every section.",
+                nameof(normalizedDividerPositions));
+        }
+
+        float[] sortedDividers = new float[dividerCount];
+        for (int i = 0; i < dividerCount; i++)
+        {
+            float divider = normalizedDividerPositions[i];
+            if (float.IsNaN(divider) || float.IsInfinity(divider))
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(normalizedDividerPositions),
+                    "Divider positions must be finite values.");
+            }
+
+            sortedDividers[i] = Mathf.Clamp01(divider);
+        }
+
+        Array.Sort(sortedDividers);
+        StageCaptureSection[] sections = new StageCaptureSection[dividerCount + 1];
+        int previousOffset = 0;
+        for (int i = 0; i < dividerCount; i++)
+        {
+            int requestedOffset = Mathf.RoundToInt(sortedDividers[i] * totalPixelHeight);
+            int minimumOffset = previousOffset + 1;
+            int maximumOffset = totalPixelHeight - (dividerCount - i);
+            int dividerOffset = Mathf.Clamp(
+                requestedOffset,
+                minimumOffset,
+                maximumOffset);
+            sections[i] = new StageCaptureSection(
+                previousOffset,
+                dividerOffset - previousOffset);
+            previousOffset = dividerOffset;
+        }
+
+        sections[sections.Length - 1] = new StageCaptureSection(
+            previousOffset,
+            totalPixelHeight - previousOffset);
+        return sections;
+    }
+
+    public static Texture2D RenderPreview(
+        StageCapturePlan plan,
+        int maximumWidth,
+        int maximumHeight)
+    {
+        if (maximumWidth < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maximumWidth));
+        }
+
+        if (maximumHeight < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maximumHeight));
+        }
+
+        double scale = Math.Min(
+            1d,
+            Math.Min(
+                maximumWidth / (double)plan.Width,
+                maximumHeight / (double)plan.Height));
+        int previewWidth = Mathf.Max(1, Mathf.RoundToInt((float)(plan.Width * scale)));
+        int previewHeight = Mathf.Max(1, Mathf.RoundToInt((float)(plan.Height * scale)));
+        StageCapturePlan previewPlan = new StageCapturePlan(
+            plan.Scene,
+            plan.SourceCamera,
+            plan.Area,
+            previewWidth,
+            previewHeight,
+            Mathf.Min(1024, previewHeight),
+            1,
+            plan.RendererCount);
+
+        Texture2D preview = RenderImage(previewPlan, false, out bool cancelled);
+        if (cancelled || preview == null)
+        {
+            throw new InvalidOperationException("스테이지 미리보기 렌더링이 취소되었습니다.");
+        }
+
+        preview.name = "Stage Capture Preview";
+        preview.hideFlags = HideFlags.HideAndDontSave;
+        return preview;
+    }
+
     public static bool Capture(StageCapturePlan plan, string outputPath)
     {
         if (string.IsNullOrWhiteSpace(outputPath))
@@ -521,14 +1113,18 @@ internal static class StageCaptureUtility
             throw new ArgumentException("Output path is empty.", nameof(outputPath));
         }
 
-        return Capture(plan, new[] { outputPath }, false);
+        StageCaptureSection[] sections =
+        {
+            new StageCaptureSection(0, plan.Height)
+        };
+        return Capture(plan, new[] { outputPath }, sections, false);
     }
 
     public static bool CaptureSections(
         StageCapturePlan plan,
         string outputDirectory,
         string baseFileName,
-        int sectionCount,
+        IReadOnlyList<StageCaptureSection> sections,
         out string[] outputPaths)
     {
         if (string.IsNullOrWhiteSpace(outputDirectory))
@@ -541,6 +1137,22 @@ internal static class StageCaptureUtility
             throw new ArgumentException("Base file name is empty.", nameof(baseFileName));
         }
 
+        ValidateSections(plan.Height, sections);
+
+        outputPaths = CreateUniqueOutputPaths(
+            outputDirectory,
+            SanitizeFileName(baseFileName),
+            sections.Count);
+        return Capture(plan, outputPaths, sections, true);
+    }
+
+    public static bool CaptureSections(
+        StageCapturePlan plan,
+        string outputDirectory,
+        string baseFileName,
+        int sectionCount,
+        out string[] outputPaths)
+    {
         if (sectionCount < 1 || sectionCount > plan.Height)
         {
             throw new ArgumentOutOfRangeException(
@@ -548,11 +1160,21 @@ internal static class StageCaptureUtility
                 $"Section count must be between 1 and {plan.Height:N0}.");
         }
 
-        outputPaths = CreateUniqueOutputPaths(
+        StageCaptureSection[] sections = new StageCaptureSection[sectionCount];
+        int topPixelOffset = 0;
+        for (int i = 0; i < sectionCount; i++)
+        {
+            int sectionHeight = GetSectionHeight(plan.Height, sectionCount, i);
+            sections[i] = new StageCaptureSection(topPixelOffset, sectionHeight);
+            topPixelOffset += sectionHeight;
+        }
+
+        return CaptureSections(
+            plan,
             outputDirectory,
-            SanitizeFileName(baseFileName),
-            sectionCount);
-        return Capture(plan, outputPaths, true);
+            baseFileName,
+            sections,
+            out outputPaths);
     }
 
     public static int GetSectionHeight(int totalPixelHeight, int sectionCount, int sectionIndex)
@@ -577,25 +1199,100 @@ internal static class StageCaptureUtility
         return baseHeight + (sectionIndex < remainder ? 1 : 0);
     }
 
+    private static void ValidateSections(
+        int totalPixelHeight,
+        IReadOnlyList<StageCaptureSection> sections)
+    {
+        if (sections == null || sections.Count < 1 || sections.Count > totalPixelHeight)
+        {
+            throw new ArgumentException("Section list is invalid.", nameof(sections));
+        }
+
+        int expectedTopOffset = 0;
+        for (int i = 0; i < sections.Count; i++)
+        {
+            StageCaptureSection section = sections[i];
+            if (section.TopPixelOffset != expectedTopOffset || section.Height < 1)
+            {
+                throw new ArgumentException(
+                    "Sections must be contiguous, ordered, and at least one pixel high.",
+                    nameof(sections));
+            }
+
+            expectedTopOffset = section.EndPixelOffset;
+        }
+
+        if (expectedTopOffset != totalPixelHeight)
+        {
+            throw new ArgumentException(
+                "Sections must cover the full image height.",
+                nameof(sections));
+        }
+    }
+
     private static bool Capture(
         StageCapturePlan plan,
         IReadOnlyList<string> outputPaths,
+        IReadOnlyList<StageCaptureSection> sections,
         bool deleteOutputsOnFailure)
     {
-        if (outputPaths == null || outputPaths.Count < 1 || outputPaths.Count > plan.Height)
+        ValidateSections(plan.Height, sections);
+        if (outputPaths == null || outputPaths.Count != sections.Count)
         {
             throw new ArgumentException("Output path count is invalid.", nameof(outputPaths));
         }
 
         Texture2D image = null;
-        GameObject captureCameraObject = null;
-        RenderTexture previousActive = RenderTexture.active;
         List<string> createdOutputPaths = new List<string>();
 
         try
         {
-            image = new Texture2D(plan.Width, plan.Height, TextureFormat.RGB24, false);
-            image.name = "Stage Capture Buffer";
+            image = RenderImage(plan, true, out bool cancelled);
+            if (cancelled)
+            {
+                return false;
+            }
+
+            SaveOutputImages(image, outputPaths, sections, createdOutputPaths);
+            return true;
+        }
+        catch
+        {
+            if (deleteOutputsOnFailure)
+            {
+                DeleteGeneratedFiles(createdOutputPaths);
+            }
+
+            throw;
+        }
+        finally
+        {
+            EditorUtility.ClearProgressBar();
+            if (image != null)
+            {
+                UnityEngine.Object.DestroyImmediate(image);
+            }
+        }
+    }
+
+    private static Texture2D RenderImage(
+        StageCapturePlan plan,
+        bool allowCancellation,
+        out bool cancelled)
+    {
+        Texture2D image = null;
+        GameObject captureCameraObject = null;
+        RenderTexture previousActive = RenderTexture.active;
+        bool completed = false;
+        cancelled = false;
+
+        try
+        {
+            image = new Texture2D(plan.Width, plan.Height, TextureFormat.RGB24, false)
+            {
+                name = "Stage Capture Buffer",
+                hideFlags = HideFlags.HideAndDontSave
+            };
 
             captureCameraObject = new GameObject("Stage Capture Camera")
             {
@@ -615,12 +1312,14 @@ internal static class StageCaptureUtility
 
             for (int destinationY = 0; destinationY < plan.Height; destinationY += plan.TileHeight)
             {
-                if (EditorUtility.DisplayCancelableProgressBar(
+                if (allowCancellation &&
+                    EditorUtility.DisplayCancelableProgressBar(
                         "Stage Portrait Capture",
                         $"타일 렌더링 중 ({tileIndex + 1}/{tileCount})",
                         tileIndex / (float)Mathf.Max(1, tileCount)))
                 {
-                    return false;
+                    cancelled = true;
+                    return null;
                 }
 
                 int currentTileHeight = Mathf.Min(plan.TileHeight, plan.Height - destinationY);
@@ -635,29 +1334,18 @@ internal static class StageCaptureUtility
             }
 
             image.Apply(false, false);
-            SaveOutputImages(image, outputPaths, createdOutputPaths);
-            return true;
-        }
-        catch
-        {
-            if (deleteOutputsOnFailure)
-            {
-                DeleteGeneratedFiles(createdOutputPaths);
-            }
-
-            throw;
+            completed = true;
+            return image;
         }
         finally
         {
             RenderTexture.active = previousActive;
-            EditorUtility.ClearProgressBar();
-
             if (captureCameraObject != null)
             {
                 UnityEngine.Object.DestroyImmediate(captureCameraObject);
             }
 
-            if (image != null)
+            if (!completed && image != null)
             {
                 UnityEngine.Object.DestroyImmediate(image);
             }
@@ -667,6 +1355,7 @@ internal static class StageCaptureUtility
     private static void SaveOutputImages(
         Texture2D fullImage,
         IReadOnlyList<string> outputPaths,
+        IReadOnlyList<StageCaptureSection> sections,
         List<string> createdOutputPaths)
     {
         if (outputPaths.Count == 1)
@@ -678,7 +1367,6 @@ internal static class StageCaptureUtility
 
         NativeArray<byte> fullImageData = fullImage.GetRawTextureData<byte>();
         int bytesPerRow = fullImage.width * 3;
-        int topPixelOffset = 0;
 
         for (int sectionIndex = 0; sectionIndex < outputPaths.Count; sectionIndex++)
         {
@@ -687,11 +1375,9 @@ internal static class StageCaptureUtility
                 $"분할 PNG 인코딩 중 ({sectionIndex + 1}/{outputPaths.Count})",
                 0.9f + 0.1f * sectionIndex / outputPaths.Count);
 
-            int sectionHeight = GetSectionHeight(
-                fullImage.height,
-                outputPaths.Count,
-                sectionIndex);
-            int sourceY = fullImage.height - topPixelOffset - sectionHeight;
+            StageCaptureSection section = sections[sectionIndex];
+            int sectionHeight = section.Height;
+            int sourceY = fullImage.height - section.EndPixelOffset;
             Texture2D sectionImage = new Texture2D(
                 fullImage.width,
                 sectionHeight,
@@ -715,8 +1401,6 @@ internal static class StageCaptureUtility
             {
                 UnityEngine.Object.DestroyImmediate(sectionImage);
             }
-
-            topPixelOffset += sectionHeight;
         }
     }
 
