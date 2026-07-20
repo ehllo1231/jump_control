@@ -11,21 +11,93 @@ using Object = UnityEngine.Object;
 public static class Stage1DesignSectionApplier
 {
     private const string ScenePath = "Assets/Scenes/MVPJumpScene.unity";
-    private const string DesignSpritePath = "Assets/Art/Design/stage1/design1.png";
-    private const string StructureReferencePath = "Assets/Art/Design/stage1/structure1.png";
-    private const string ShaderPath = "Assets/Shaders/StageDesignBackgroundKey.shader";
-    private const string MaterialPath = "Assets/Art/Design/stage1/StageDesignBackgroundKey.mat";
+    private const string DesignDirectory = "Assets/Art/graybox_design/stage1/stage1-1_design";
+    private const string StructureReferencePath = DesignDirectory + "/1-1그레이박스.png";
     private const string TestRootName = "DesignTest_Section_01_of_05";
-    private const string DesignObjectName = "Design1";
-    private const int OutputWidth = 2160;
-    private const int DesignSortingOrder = 5;
+    private const int ReferenceWidth = 2160;
+    private const int ReferenceHeight = 1515;
+    private const int BaseSortingOrder = 5;
+    private const int DetailSortingOrder = 6;
     private const float PixelsPerUnit = 100f;
-    private const float KeyThreshold = 0.09f;
-    private const float KeyFeather = 0.08f;
     private const float SectionWorldLeft = -31.485327f;
     private const float SectionWorldRight = 29.92495f;
     private const float SectionWorldBottom = -6.97415f;
-    private const float SectionWorldTop = 38.83467f;
+    private const float OriginalSectionWorldTop = 38.83467f;
+    private const int OriginalReferenceHeight = 1611;
+    private const int CroppedTopPixels = 96;
+
+    private static readonly PartPlacement[] PartPlacements =
+    {
+        new PartPlacement(
+            "Parts1",
+            DesignDirectory + "/parts1.png",
+            new Vector2Int(1322, 1056),
+            new RectInt(9, 8, 1304, 1039),
+            new RectInt(368, 0, 1775, 1498),
+            BaseSortingOrder,
+            stretchToTargetHeight: true),
+        new PartPlacement(
+            "Parts2",
+            DesignDirectory + "/parts2.png",
+            new Vector2Int(370, 918),
+            new RectInt(9, 8, 352, 901),
+            new RectInt(1219, 0, 468, 1213),
+            DetailSortingOrder,
+            stretchToTargetHeight: true),
+        new PartPlacement(
+            "Parts3",
+            DesignDirectory + "/parts3.png",
+            new Vector2Int(347, 608),
+            new RectInt(9, 9, 329, 590),
+            new RectInt(1034, 51, 422, 775),
+            DetailSortingOrder,
+            stretchToTargetHeight: true),
+        new PartPlacement(
+            "Parts4",
+            DesignDirectory + "/parts4.png",
+            new Vector2Int(107, 46),
+            new RectInt(9, 9, 89, 28),
+            new RectInt(1194, 178, 112, 26),
+            DetailSortingOrder,
+            stretchToTargetHeight: false),
+        new PartPlacement(
+            "Parts5",
+            DesignDirectory + "/parts5.png",
+            new Vector2Int(105, 46),
+            new RectInt(9, 9, 87, 28),
+            new RectInt(1364, 250, 112, 27),
+            DetailSortingOrder,
+            stretchToTargetHeight: false)
+    };
+
+    private readonly struct PartPlacement
+    {
+        public PartPlacement(
+            string objectName,
+            string assetPath,
+            Vector2Int expectedSize,
+            RectInt contentPixels,
+            RectInt targetPixels,
+            int sortingOrder,
+            bool stretchToTargetHeight)
+        {
+            ObjectName = objectName;
+            AssetPath = assetPath;
+            ExpectedSize = expectedSize;
+            ContentPixels = contentPixels;
+            TargetPixels = targetPixels;
+            SortingOrder = sortingOrder;
+            StretchToTargetHeight = stretchToTargetHeight;
+        }
+
+        public string ObjectName { get; }
+        public string AssetPath { get; }
+        public Vector2Int ExpectedSize { get; }
+        public RectInt ContentPixels { get; }
+        public RectInt TargetPixels { get; }
+        public int SortingOrder { get; }
+        public bool StretchToTargetHeight { get; }
+    }
 
     [MenuItem("Tools/Jump Timing/Stage1 Design/Apply Section 1 Test", false, 80)]
     public static void ApplySectionOne()
@@ -62,13 +134,13 @@ public static class Stage1DesignSectionApplier
         Transform collisionRoot = FindRequiredTransform(scene, "Stage1/Collision");
         string collisionStateBefore = CaptureCollisionState(collisionRoot);
 
-        Sprite designSprite = EnsureDesignSprite();
-        Material designMaterial = EnsureDesignMaterial();
         Rect sectionArea = CreateReferenceSectionArea();
+        Sprite[] partSprites = EnsurePartSprites();
 
         Transform stageArt = FindStageArt(scene);
         Transform testRoot = RebuildTestRoot(stageArt);
-        CreateDesignObject(testRoot, designSprite, designMaterial, sectionArea);
+        CreatePartObjects(testRoot, partSprites, sectionArea);
+        ValidatePartObjects(testRoot);
 
         string collisionStateAfter = CaptureCollisionState(collisionRoot);
         if (!string.Equals(collisionStateBefore, collisionStateAfter, StringComparison.Ordinal))
@@ -90,7 +162,8 @@ public static class Stage1DesignSectionApplier
         }
 
         Debug.Log(
-            $"Applied {DesignSpritePath} to Stage1/ForegroundDecor/StageArt/{TestRootName}. " +
+            $"Applied {PartPlacements.Length} design parts to " +
+            $"Stage1/ForegroundDecor/StageArt/{TestRootName}. " +
             $"World area: x {sectionArea.xMin:F3}..{sectionArea.xMax:F3}, " +
             $"y {sectionArea.yMin:F3}..{sectionArea.yMax:F3}. " +
             "Stage1 Collision state remained unchanged.");
@@ -112,19 +185,43 @@ public static class Stage1DesignSectionApplier
         return EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
     }
 
-    private static Sprite EnsureDesignSprite()
+    private static Sprite[] EnsurePartSprites()
     {
-        if (!File.Exists(DesignSpritePath) || !File.Exists(StructureReferencePath))
+        if (!File.Exists(StructureReferencePath))
         {
-            throw new FileNotFoundException(
-                $"Both {DesignSpritePath} and {StructureReferencePath} are required.");
+            throw new FileNotFoundException($"The graybox reference is required: {StructureReferencePath}");
         }
 
-        AssetDatabase.ImportAsset(DesignSpritePath, ImportAssetOptions.ForceSynchronousImport);
-        TextureImporter importer = AssetImporter.GetAtPath(DesignSpritePath) as TextureImporter;
+        Sprite[] sprites = new Sprite[PartPlacements.Length];
+        for (int index = 0; index < PartPlacements.Length; index++)
+        {
+            sprites[index] = EnsurePartSprite(PartPlacements[index]);
+        }
+
+        return sprites;
+    }
+
+    private static Sprite EnsurePartSprite(PartPlacement placement)
+    {
+        if (!File.Exists(placement.AssetPath))
+        {
+            throw new FileNotFoundException($"Stage1 design part is missing: {placement.AssetPath}");
+        }
+
+        Vector2Int actualSize = ReadPngSize(placement.AssetPath);
+        if (actualSize != placement.ExpectedSize)
+        {
+            throw new InvalidOperationException(
+                $"Expected {placement.AssetPath} to be {placement.ExpectedSize.x}x{placement.ExpectedSize.y}, " +
+                $"but it is {actualSize.x}x{actualSize.y}.");
+        }
+
+        AssetDatabase.ImportAsset(placement.AssetPath, ImportAssetOptions.ForceSynchronousImport);
+        TextureImporter importer = AssetImporter.GetAtPath(placement.AssetPath) as TextureImporter;
         if (importer == null)
         {
-            throw new InvalidOperationException($"Texture importer was not created for {DesignSpritePath}.");
+            throw new InvalidOperationException(
+                $"Texture importer was not created for {placement.AssetPath}.");
         }
 
         TextureImporterSettings settings = new TextureImporterSettings();
@@ -135,67 +232,41 @@ public static class Stage1DesignSectionApplier
         importer.spriteImportMode = SpriteImportMode.Single;
         importer.spritePixelsPerUnit = PixelsPerUnit;
         importer.mipmapEnabled = false;
-        importer.alphaIsTransparency = false;
+        importer.alphaIsTransparency = true;
         importer.filterMode = FilterMode.Bilinear;
         importer.wrapMode = TextureWrapMode.Clamp;
+        importer.npotScale = TextureImporterNPOTScale.None;
+        importer.maxTextureSize = 4096;
         importer.textureCompression = TextureImporterCompression.Uncompressed;
         importer.SaveAndReimport();
 
-        Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(DesignSpritePath);
+        Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(placement.AssetPath);
         if (sprite == null)
         {
-            throw new InvalidOperationException($"Sprite import failed for {DesignSpritePath}.");
+            throw new InvalidOperationException($"Sprite import failed for {placement.AssetPath}.");
         }
 
         return sprite;
     }
 
-    private static Material EnsureDesignMaterial()
-    {
-        AssetDatabase.ImportAsset(ShaderPath, ImportAssetOptions.ForceSynchronousImport);
-        Shader shader = AssetDatabase.LoadAssetAtPath<Shader>(ShaderPath);
-        if (shader == null || !shader.isSupported)
-        {
-            throw new InvalidOperationException($"Stage design shader is missing or unsupported: {ShaderPath}");
-        }
-
-        Material material = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
-        if (material == null)
-        {
-            material = new Material(shader)
-            {
-                name = "StageDesignBackgroundKey"
-            };
-            AssetDatabase.CreateAsset(material, MaterialPath);
-        }
-        else if (material.shader != shader)
-        {
-            material.shader = shader;
-        }
-
-        material.SetFloat("_KeyThreshold", KeyThreshold);
-        material.SetFloat("_KeyFeather", KeyFeather);
-        EditorUtility.SetDirty(material);
-        return material;
-    }
-
     private static Rect CreateReferenceSectionArea()
     {
         Vector2Int structureSize = ReadPngSize(StructureReferencePath);
-        if (structureSize.x != OutputWidth || structureSize.y != 1611)
+        if (structureSize.x != ReferenceWidth || structureSize.y != ReferenceHeight)
         {
             throw new InvalidOperationException(
-                $"The expected reference size is {OutputWidth}x1611, but " +
+                $"The expected reference size is {ReferenceWidth}x{ReferenceHeight}, but " +
                 $"{StructureReferencePath} is {structureSize.x}x{structureSize.y}.");
         }
 
-        // structure1의 중앙 세로벽, 좌우 장벽, 바닥 픽셀 경계를 현재
-        // CollisionGuides의 월드 Bounds에 최소제곱으로 대응시킨 값이다.
+        float originalWorldHeight = OriginalSectionWorldTop - SectionWorldBottom;
+        float croppedWorldTop = OriginalSectionWorldTop -
+                                CroppedTopPixels * originalWorldHeight / OriginalReferenceHeight;
         return Rect.MinMaxRect(
             SectionWorldLeft,
             SectionWorldBottom,
             SectionWorldRight,
-            SectionWorldTop);
+            croppedWorldTop);
     }
 
     private static Transform RebuildTestRoot(Transform stageArt)
@@ -212,28 +283,81 @@ public static class Stage1DesignSectionApplier
         return testRootObject.transform;
     }
 
-    private static void CreateDesignObject(
+    private static void CreatePartObjects(
         Transform testRoot,
-        Sprite sprite,
-        Material material,
+        IReadOnlyList<Sprite> sprites,
         Rect sectionArea)
     {
-        GameObject designObject = new GameObject(DesignObjectName);
-        designObject.transform.SetParent(testRoot, false);
-        designObject.transform.position = new Vector3(sectionArea.center.x, sectionArea.center.y, 0f);
+        float worldPerTargetPixelX = sectionArea.width / ReferenceWidth;
+        float worldPerTargetPixelY = sectionArea.height / ReferenceHeight;
 
-        Vector2 spriteSize = sprite.bounds.size;
-        designObject.transform.localScale = new Vector3(
-            sectionArea.width / spriteSize.x,
-            sectionArea.height / spriteSize.y,
-            1f);
+        for (int index = 0; index < PartPlacements.Length; index++)
+        {
+            PartPlacement placement = PartPlacements[index];
+            Sprite sprite = sprites[index];
+            float targetPixelsPerSourcePixelX =
+                (float)placement.TargetPixels.width / placement.ContentPixels.width;
+            float localScaleX = targetPixelsPerSourcePixelX *
+                                worldPerTargetPixelX * sprite.pixelsPerUnit;
 
-        SpriteRenderer renderer = designObject.AddComponent<SpriteRenderer>();
-        renderer.sprite = sprite;
-        renderer.sharedMaterial = material;
-        renderer.sortingLayerID = 0;
-        renderer.sortingOrder = DesignSortingOrder;
-        renderer.color = Color.white;
+            float localScaleY;
+            float targetPixelsPerSourcePixelY;
+            if (placement.StretchToTargetHeight)
+            {
+                targetPixelsPerSourcePixelY =
+                    (float)placement.TargetPixels.height / placement.ContentPixels.height;
+                localScaleY = targetPixelsPerSourcePixelY *
+                              worldPerTargetPixelY * sprite.pixelsPerUnit;
+            }
+            else
+            {
+                localScaleY = localScaleX;
+                targetPixelsPerSourcePixelY =
+                    localScaleY / (sprite.pixelsPerUnit * worldPerTargetPixelY);
+            }
+
+            float spriteCenterFromContentLeft =
+                sprite.rect.width * 0.5f - placement.ContentPixels.xMin;
+            float spriteCenterFromContentTop =
+                sprite.rect.height * 0.5f - placement.ContentPixels.yMin;
+            float targetCenterPixelX = placement.TargetPixels.xMin +
+                                       spriteCenterFromContentLeft * targetPixelsPerSourcePixelX;
+            float targetCenterPixelY = placement.TargetPixels.yMin +
+                                       spriteCenterFromContentTop * targetPixelsPerSourcePixelY;
+
+            GameObject partObject = new GameObject(placement.ObjectName);
+            partObject.transform.SetParent(testRoot, false);
+            partObject.transform.position = new Vector3(
+                sectionArea.xMin + targetCenterPixelX * worldPerTargetPixelX,
+                sectionArea.yMax - targetCenterPixelY * worldPerTargetPixelY,
+                0f);
+            partObject.transform.localScale = new Vector3(localScaleX, localScaleY, 1f);
+
+            SpriteRenderer renderer = partObject.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.sortingLayerID = 0;
+            renderer.sortingOrder = placement.SortingOrder;
+            renderer.color = Color.white;
+        }
+    }
+
+    private static void ValidatePartObjects(Transform testRoot)
+    {
+        SpriteRenderer[] renderers = testRoot.GetComponentsInChildren<SpriteRenderer>(true);
+        if (renderers.Length != PartPlacements.Length || testRoot.childCount != PartPlacements.Length)
+        {
+            throw new InvalidOperationException(
+                $"Expected exactly {PartPlacements.Length} Stage1 design parts, but found " +
+                $"{renderers.Length} renderers and {testRoot.childCount} direct children.");
+        }
+
+        if (testRoot.GetComponentInChildren<Collider2D>(true) != null ||
+            testRoot.GetComponentInChildren<Rigidbody2D>(true) != null ||
+            testRoot.GetComponentInChildren<Platform2D>(true) != null)
+        {
+            throw new InvalidOperationException(
+                "Stage1 design parts must not contain Collider2D, Rigidbody2D, or Platform2D components.");
+        }
     }
 
     private static Transform FindStageArt(Scene scene)
@@ -364,9 +488,9 @@ public static class Stage1DesignSectionApplier
             scene,
             FindSceneCamera(scene),
             sectionArea,
-            OutputWidth,
-            1611,
-            1611,
+            ReferenceWidth,
+            ReferenceHeight,
+            ReferenceHeight,
             4,
             0);
         if (!StageCaptureUtility.Capture(previewPlan, previewPath))
