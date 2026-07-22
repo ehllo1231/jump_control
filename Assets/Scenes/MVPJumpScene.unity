@@ -18416,6 +18416,10 @@ MonoBehaviour:
   offset: {x: 0, y: 1.6, z: -10}
   smoothTime: 0.16
   minY: 0.25
+  pixelPerfect: 1
+  assetsPixelsPerUnit: 16
+  referenceResolution: {x: 384, y: 216}
+  snapCameraPosition: 1
 --- !u!81 &1253194631
 AudioListener:
   m_ObjectHideFlags: 0
@@ -18459,7 +18463,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 7
+  orthographic size: 6.75
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2

@@ -332,7 +332,7 @@ public static class MVPSceneBuilder
 
         Camera camera = cameraObject.AddComponent<Camera>();
         camera.orthographic = true;
-        camera.orthographicSize = 4.8f;
+        camera.orthographicSize = SimpleCameraFollow.DefaultOrthographicSize;
         camera.clearFlags = CameraClearFlags.SolidColor;
         camera.backgroundColor = new Color(0.08f, 0.09f, 0.11f);
 
