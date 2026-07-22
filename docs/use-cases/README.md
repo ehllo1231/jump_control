@@ -52,3 +52,4 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 | UC-010-01 | 스테이지 전체를 세로 고화질 이미지로 저장 | Implemented | [문서](./UC-010-01-capture-stage-as-portrait-image.md) | 2026-07-19 |
 | UC-010-02 | 스테이지 캡처를 세로 구간별 이미지로 저장 | Implemented | [문서](./UC-010-02-save-stage-as-vertical-sections.md) | 2026-07-19 |
 | UC-011-01 | 픽셀 퍼펙트 카메라 렌더링 | Verified | [문서](./UC-011-01-render-pixel-perfect-camera.md) | 2026-07-22 |
+| UC-011-02 | 플레이어 시각 요소 픽셀 정렬 | Verified | [문서](./UC-011-02-align-player-visual-to-pixels.md) | 2026-07-22 |

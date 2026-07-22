@@ -5,6 +5,7 @@ using UnityEngine;
 /// 캐릭터 스프라이트나 Animator를 붙여도 점프 로직은 PlayerController에 그대로 둘 수 있습니다.
 /// </summary>
 [ExecuteAlways]
+[DefaultExecutionOrder(200)]
 public class PlayerVisual : MonoBehaviour
 {
     private const float MinimumBodySize = 0.1f;
@@ -18,6 +19,9 @@ public class PlayerVisual : MonoBehaviour
     [SerializeField] private Transform visualRoot;
     [SerializeField] private SpriteRenderer bodyRenderer;
     [SerializeField] private BoxCollider2D bodyCollider;
+
+    [Header("Pixel Perfect")]
+    [SerializeField] private bool pixelSnapVisual = true;
 
     [Header("State Colors")]
     [SerializeField] private bool tintByState = true;
@@ -35,6 +39,7 @@ public class PlayerVisual : MonoBehaviour
     private LineRenderer hitboxOutline;
     private bool isSyncing;
     private bool facingLeft;
+    private Camera pixelSnapCamera;
 
     public bool IsFacingLeft => facingLeft;
 
@@ -52,11 +57,16 @@ public class PlayerVisual : MonoBehaviour
     private void LateUpdate()
     {
         SyncVisualAndCollider();
+        if (Application.isPlaying)
+        {
+            ApplyVisualPixelSnap();
+        }
     }
 
     private void OnDisable()
     {
         SetHitboxOutlineActive(false);
+        pixelSnapCamera = null;
     }
 
     public void SetState(PlayerJumpState state)
@@ -215,6 +225,65 @@ public class PlayerVisual : MonoBehaviour
         }
 
         bodyCollider.offset = Vector2.zero;
+    }
+
+    private void ApplyVisualPixelSnap()
+    {
+        if (!pixelSnapVisual || visualRoot == null || visualRoot == transform)
+        {
+            return;
+        }
+
+        if (!TryGetWorldUnitsPerScreenPixel(out float pixelStep))
+        {
+            return;
+        }
+
+        Vector3 worldPosition = visualRoot.position;
+        Vector3 snappedPosition = SimpleCameraFollow.SnapToPixelGrid(worldPosition, pixelStep);
+        if ((worldPosition - snappedPosition).sqrMagnitude > AlignmentTolerance)
+        {
+            visualRoot.position = snappedPosition;
+        }
+    }
+
+    private bool TryGetWorldUnitsPerScreenPixel(out float pixelStep)
+    {
+        pixelStep = 0f;
+        Camera camera = GetPixelSnapCamera();
+        if (camera == null || !camera.orthographic)
+        {
+            return false;
+        }
+
+        SimpleCameraFollow pixelPerfectCamera = camera.GetComponent<SimpleCameraFollow>();
+        if (pixelPerfectCamera != null && pixelPerfectCamera.enabled)
+        {
+            pixelStep = pixelPerfectCamera.WorldUnitsPerScreenPixel;
+        }
+        else
+        {
+            int pixelHeight = camera.pixelHeight > 0 ? camera.pixelHeight : Screen.height;
+            pixelStep = camera.orthographicSize * 2f / Mathf.Max(1, pixelHeight);
+        }
+
+        return IsFinite(pixelStep) && pixelStep > 0f;
+    }
+
+    private Camera GetPixelSnapCamera()
+    {
+        if (pixelSnapCamera != null && pixelSnapCamera.isActiveAndEnabled)
+        {
+            return pixelSnapCamera;
+        }
+
+        pixelSnapCamera = Camera.main;
+        if (pixelSnapCamera == null)
+        {
+            pixelSnapCamera = FindFirstObjectByType<Camera>();
+        }
+
+        return pixelSnapCamera;
     }
 
     private float GetVisualMirrorAxisX()

@@ -237,6 +237,7 @@ internal sealed class PlayerSpriteAutoImporter : AssetPostprocessor
         importer.npotScale = TextureImporterNPOTScale.None;
         importer.wrapMode = TextureWrapMode.Clamp;
         importer.filterMode = FilterMode.Point;
+        importer.anisoLevel = 0;
         importer.textureCompression = TextureImporterCompression.Uncompressed;
 
         if (TryReadPngSize(importer.assetPath, out _, out int height) && height > 0)
