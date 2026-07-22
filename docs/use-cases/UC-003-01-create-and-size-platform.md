@@ -1,7 +1,7 @@
 # UC-003-01: Platform 생성 및 크기 조정
 
 - 상태: Implemented
-- 마지막 갱신일: 2026-07-17
+- 마지막 갱신일: 2026-07-22
 
 ## 목적
 
@@ -56,8 +56,9 @@
 - `MapBuilderWindow.CreatePlatform`이 Platform 프리팹을 활성 씬에 생성한다.
 - `Platform2D`가 Width, Height, TopCenter, WorldBounds를 관리하고 SpriteRenderer와 BoxCollider2D 크기를 동기화한다.
 - `Platform2D.VisualRenderer`가 직접 자식 `Visual`의 SpriteRenderer를 제공하고 루트 Collider와 크기 동기화를 유지한다.
-- `Platform2D.LateUpdate`가 SpriteRenderer의 보이는 크기 변경을 감지해 Width, Height, BoxCollider2D.size와 BoxCollider2D.offset을 다시 맞춘다.
+- Edit Mode의 `Platform2D.LateUpdate`가 SpriteRenderer의 보이는 크기 변경을 감지해 Width, Height, BoxCollider2D.size와 BoxCollider2D.offset을 다시 맞춘다.
 - Scene View Rect Tool 또는 SpriteRenderer size를 직접 수정한 경우에도 보이는 Platform 도형과 충돌체 크기가 같게 유지된다.
+- Play Mode에서는 정적 Platform의 Collider와 삼각형 Mesh를 매 프레임 재생성하지 않으며, 공개 크기·도형 변경 API를 호출하면 변경 사항을 즉시 적용한다.
 - `Platform2DEditor`가 Width와 Height 입력 필드를 제공한다.
 - `MVPWhiteSquare` 스프라이트를 Full Rect mesh로 설정했다.
 - `Platform2D.OnValidate`의 크기 적용을 Editor delay call로 미뤄 생성 및 실행 중 SpriteRenderer 크기 변경 오류가 발생하지 않게 했다.

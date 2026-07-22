@@ -1,7 +1,7 @@
 # UC-005-02: Android 120 FPS 및 터치 반응성
 
 - 상태: Implemented
-- 마지막 갱신일: 2026-06-27
+- 마지막 갱신일: 2026-07-22
 
 ## 목적
 
@@ -47,6 +47,7 @@
 - `JumpInputReader`는 이미 `Input.touchCount`와 `Input.GetTouch`를 매 프레임 읽어 터치 시작/종료를 같은 프레임의 `WasPressed`/`WasReleased`로 변환하고 있었다.
 - 터치 입력 코드 자체의 추가 프레임 지연은 확인되지 않았고, 낮은 FPS와 vSync 제한이 입력 샘플링 간격을 키울 수 있어 Android 시작 시 120 FPS 목표를 적용했다.
 - Unity 포함 C# 컴파일러로 Android 심볼을 켠 런타임 스크립트 컴파일과 일반 런타임 스크립트 컴파일을 확인했다. 기존 직렬화 필드 관련 경고만 출력됐고 컴파일 오류는 없었다.
+- 2026-07-22 점프 중 프레임 안정성을 위해 정적 Platform의 런타임 Collider·Mesh 재생성, 중복 지면 검사와 불필요한 시각 Transform 기록을 제거했다. Android Development Player 심볼로 런타임 스크립트 컴파일을 다시 확인했다.
 
 ## 미결 질문
 

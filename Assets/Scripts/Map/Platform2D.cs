@@ -122,10 +122,17 @@ public sealed class Platform2D : MonoBehaviour, IPlatformSurface
         ApplySize();
     }
 
+#if UNITY_EDITOR
     private void LateUpdate()
     {
+        if (Application.isPlaying)
+        {
+            return;
+        }
+
         SyncColliderToVisibleSize();
     }
+#endif
 
     public void SetSize(float newWidth, float newHeight)
     {

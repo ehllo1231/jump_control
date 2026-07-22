@@ -47,8 +47,9 @@
 
 ## 구현 메모
 
-- `SimpleCameraFollow`가 화면 크기와 `384 × 216` 기준 해상도로 정수 픽셀 배율을 계산하고, 16 PPU 기준 Orthographic Size를 매 프레임 적용한다.
+- `SimpleCameraFollow`가 화면 크기와 `384 × 216` 기준 해상도로 정수 픽셀 배율을 계산하고, 16 PPU 기준 Orthographic Size가 실제로 달라질 때 적용한다.
 - 부드러운 추적 계산 뒤 카메라 X, Y만 `1 / (PPU × 픽셀 배율)` 월드 단위로 반올림하며 Z 위치는 변경하지 않는다.
+- 픽셀 정렬된 카메라 위치가 이전 프레임과 같으면 Transform에 같은 값을 다시 기록하지 않는다.
 - `MVPJumpScene`의 현재 카메라와 `MVPSceneBuilder`가 생성하는 카메라의 기본 Orthographic Size를 `6.75`로 통일했다.
 - Unity 6000.3.1f1의 현재 프로젝트 컴파일 응답 파일로 런타임 및 에디터 어셈블리 컴파일을 통과했다.
 - Unity 6000.3.1f1 임시 프로젝트에서 1080p·720p·기준보다 작은 화면의 픽셀 배율, 1080p Orthographic Size, X/Y 픽셀 스냅, Z 보존과 실제 Camera 컴포넌트 적용을 자동 검증했다.

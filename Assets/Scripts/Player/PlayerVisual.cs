@@ -40,6 +40,7 @@ public class PlayerVisual : MonoBehaviour
     private bool isSyncing;
     private bool facingLeft;
     private Camera pixelSnapCamera;
+    private SimpleCameraFollow pixelPerfectCamera;
 
     public bool IsFacingLeft => facingLeft;
 
@@ -56,17 +57,26 @@ public class PlayerVisual : MonoBehaviour
 
     private void LateUpdate()
     {
-        SyncVisualAndCollider();
-        if (Application.isPlaying)
+        if (!Application.isPlaying)
         {
-            ApplyVisualPixelSnap();
+            SyncVisualAndCollider();
+            return;
         }
+
+        CacheReferences();
+        ApplyVisualTransform(
+            GetConfiguredBodySize(),
+            GetConfiguredVisualScale(),
+            GetConfiguredVisualXOffset(),
+            GetConfiguredVisualYOffset(),
+            snapPositionToPixels: true);
     }
 
     private void OnDisable()
     {
         SetHitboxOutlineActive(false);
         pixelSnapCamera = null;
+        pixelPerfectCamera = null;
     }
 
     public void SetState(PlayerJumpState state)
@@ -109,7 +119,11 @@ public class PlayerVisual : MonoBehaviour
 
         facingLeft = direction.x < 0f;
         CacheReferences();
-        SyncVisualAndCollider();
+
+        if (!Application.isPlaying)
+        {
+            SyncVisualAndCollider();
+        }
     }
 
     public void SetBodySize(
@@ -130,8 +144,16 @@ public class PlayerVisual : MonoBehaviour
         debugHitboxVisible = showDebugHitbox;
         if (bodyCollider != null)
         {
-            bodyCollider.offset = Vector2.zero;
-            bodyCollider.size = Vector2.one * safeSize;
+            if (bodyCollider.offset != Vector2.zero)
+            {
+                bodyCollider.offset = Vector2.zero;
+            }
+
+            Vector2 targetColliderSize = Vector2.one * safeSize;
+            if (bodyCollider.size != targetColliderSize)
+            {
+                bodyCollider.size = targetColliderSize;
+            }
         }
 
         ApplyVisualTransform(safeSize, safeVisualScale, configuredVisualXOffset, configuredVisualYOffset);
@@ -176,7 +198,12 @@ public class PlayerVisual : MonoBehaviour
         isSyncing = false;
     }
 
-    private void ApplyVisualTransform(float bodySize, float visualScale, float visualXOffset, float visualYOffset)
+    private void ApplyVisualTransform(
+        float bodySize,
+        float visualScale,
+        float visualXOffset,
+        float visualYOffset,
+        bool snapPositionToPixels = false)
     {
         if (visualRoot == null || visualRoot == transform)
         {
@@ -195,6 +222,11 @@ public class PlayerVisual : MonoBehaviour
         float visualScaleX = facingLeft ? -visualScaleFactor : visualScaleFactor;
         Vector3 targetPosition = new Vector3(visualOffsetX, visualOffsetY, 0f);
         Vector3 targetScale = new Vector3(visualScaleX, visualScaleFactor, 1f);
+
+        if (snapPositionToPixels && pixelSnapVisual)
+        {
+            targetPosition = SnapLocalPositionToPixels(targetPosition);
+        }
 
         if (bodyRenderer != null && bodyRenderer.flipX)
         {
@@ -224,27 +256,23 @@ public class PlayerVisual : MonoBehaviour
             return;
         }
 
-        bodyCollider.offset = Vector2.zero;
+        if (bodyCollider.offset != Vector2.zero)
+        {
+            bodyCollider.offset = Vector2.zero;
+        }
     }
 
-    private void ApplyVisualPixelSnap()
+    private Vector3 SnapLocalPositionToPixels(Vector3 localPosition)
     {
-        if (!pixelSnapVisual || visualRoot == null || visualRoot == transform)
+        Transform visualParent = visualRoot.parent;
+        if (visualParent == null || !TryGetWorldUnitsPerScreenPixel(out float pixelStep))
         {
-            return;
+            return localPosition;
         }
 
-        if (!TryGetWorldUnitsPerScreenPixel(out float pixelStep))
-        {
-            return;
-        }
-
-        Vector3 worldPosition = visualRoot.position;
+        Vector3 worldPosition = visualParent.TransformPoint(localPosition);
         Vector3 snappedPosition = SimpleCameraFollow.SnapToPixelGrid(worldPosition, pixelStep);
-        if ((worldPosition - snappedPosition).sqrMagnitude > AlignmentTolerance)
-        {
-            visualRoot.position = snappedPosition;
-        }
+        return visualParent.InverseTransformPoint(snappedPosition);
     }
 
     private bool TryGetWorldUnitsPerScreenPixel(out float pixelStep)
@@ -256,7 +284,11 @@ public class PlayerVisual : MonoBehaviour
             return false;
         }
 
-        SimpleCameraFollow pixelPerfectCamera = camera.GetComponent<SimpleCameraFollow>();
+        if (pixelPerfectCamera == null || pixelPerfectCamera.gameObject != camera.gameObject)
+        {
+            pixelPerfectCamera = camera.GetComponent<SimpleCameraFollow>();
+        }
+
         if (pixelPerfectCamera != null && pixelPerfectCamera.enabled)
         {
             pixelStep = pixelPerfectCamera.WorldUnitsPerScreenPixel;

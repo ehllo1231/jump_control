@@ -51,6 +51,7 @@
 ## 구현 메모
 
 - `PlayerVisual`은 기본 시각 정렬을 마친 뒤 Play Mode의 LateUpdate에서 `Visual` 자식 위치만 픽셀 격자에 맞춘다.
+- 2026-07-22 기본 위치 적용과 픽셀 스냅을 하나의 목표 위치 계산으로 합쳐 한 프레임에 `Visual` Transform을 두 번 변경하지 않도록 최적화했다. Collider와 디버그 외곽선 동기화도 런타임 매 프레임 경로에서 제외했다.
 - `SimpleCameraFollow`가 연결된 카메라에서는 카메라의 `WorldUnitsPerScreenPixel`을 사용하고, 일반 Orthographic Camera에서는 카메라 높이와 픽셀 높이로 격자 간격을 계산한다.
 - `PlayerVisual`의 실행 순서를 200으로 지정해 기본 실행 순서의 카메라 LateUpdate가 픽셀 배율과 위치를 먼저 갱신하도록 했다.
 - Player 프리팹의 `Pixel Snap Visual`을 기본 활성화했다. Rigidbody2D의 Interpolate 설정과 Player 루트 및 Collider는 변경하지 않았다.

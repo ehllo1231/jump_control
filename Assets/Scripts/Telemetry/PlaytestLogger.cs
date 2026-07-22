@@ -8,6 +8,7 @@ using UnityEngine.SceneManagement;
 [DefaultExecutionOrder(1000)]
 public sealed class PlaytestLogger : MonoBehaviour
 {
+    private const int WriterBufferSize = 65536;
     public const string AutoLoggingEnabledPlayerPrefsKey = "JumpTiming.PlaytestLogger.AutoLoggingEnabled";
     public const string FallYThresholdPlayerPrefsKey = "JumpTiming.PlaytestLogger.FallYThreshold";
     public const float DefaultFallYThreshold = -8f;
@@ -20,6 +21,10 @@ public sealed class PlaytestLogger : MonoBehaviour
     [SerializeField, Min(0.02f)] private float sampleInterval = 0.08f;
     [SerializeField, Min(0f)] private float minimumSampleDistance = 0.03f;
 
+    [Header("File Buffer")]
+    [SerializeField, Min(0.5f)] private float flushInterval = 2f;
+    [SerializeField, Min(1)] private int maxBufferedRecords = 64;
+
     [Header("Fall Event")]
     [SerializeField] private bool useConfiguredFallYThreshold = true;
     [SerializeField] private float fallYThreshold = DefaultFallYThreshold;
@@ -29,7 +34,11 @@ public sealed class PlaytestLogger : MonoBehaviour
     private Rigidbody2D body;
     private StreamWriter writer;
     private string logPath;
+    private string sessionSceneName;
+    private string sessionPlayerName;
     private float nextSampleTime;
+    private float nextFlushTime;
+    private int bufferedRecordCount;
     private bool hasLastSamplePosition;
     private Vector2 lastSamplePosition;
     private bool fallRecorded;
@@ -97,6 +106,7 @@ public sealed class PlaytestLogger : MonoBehaviour
 
         RecordSampleIfNeeded();
         RecordFallIfNeeded();
+        FlushBufferedRecordsIfNeeded();
     }
 
     private void OnDisable()
@@ -129,16 +139,19 @@ public sealed class PlaytestLogger : MonoBehaviour
             Directory.CreateDirectory(logDirectory);
 
             Scene activeScene = SceneManager.GetActiveScene();
-            string sceneName = activeScene.IsValid() ? activeScene.name : "UnknownScene";
+            sessionSceneName = activeScene.IsValid() ? activeScene.name : "UnknownScene";
+            sessionPlayerName = player != null ? player.name : name;
             string fileName = string.Format(
                 "{0}_{1}{2}",
                 DateTime.Now.ToString("yyyyMMdd_HHmmss"),
-                PlaytestLogPaths.SanitizeFileNamePart(sceneName),
+                PlaytestLogPaths.SanitizeFileNamePart(sessionSceneName),
                 PlaytestLogPaths.LogFileExtension);
             logPath = Path.Combine(logDirectory, fileName);
-            writer = new StreamWriter(logPath, false, Encoding.UTF8);
+            writer = new StreamWriter(logPath, false, Encoding.UTF8, WriterBufferSize);
             sessionOpen = true;
             nextSampleTime = 0f;
+            nextFlushTime = Time.realtimeSinceStartup + Mathf.Max(0.5f, flushInterval);
+            bufferedRecordCount = 0;
             hasLastSamplePosition = false;
             fallRecorded = false;
 
@@ -146,9 +159,9 @@ public sealed class PlaytestLogger : MonoBehaviour
             {
                 type = PlaytestLogRecordTypes.SessionStart,
                 time = Time.timeSinceLevelLoad,
-                scene = sceneName,
+                scene = sessionSceneName,
                 timestamp = DateTime.Now.ToString("o"),
-                player = player != null ? player.name : name
+                player = sessionPlayerName
             });
         }
         catch (Exception exception)
@@ -174,18 +187,32 @@ public sealed class PlaytestLogger : MonoBehaviour
                 {
                     type = PlaytestLogRecordTypes.SessionEnd,
                     time = Time.timeSinceLevelLoad,
-                    scene = SceneManager.GetActiveScene().name,
+                    scene = sessionSceneName,
                     timestamp = DateTime.Now.ToString("o"),
-                    player = player != null ? player.name : name
+                    player = sessionPlayerName
                 });
             }
+
+            writer?.Flush();
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"Playtest Logger: 남은 로그를 저장하지 못했습니다. {exception.Message}");
         }
         finally
         {
             sessionOpen = false;
-            writer?.Flush();
-            writer?.Dispose();
+            try
+            {
+                writer?.Dispose();
+            }
+            catch (Exception)
+            {
+                // Gameplay shutdown must continue even when telemetry cleanup fails.
+            }
+
             writer = null;
+            bufferedRecordCount = 0;
         }
     }
 
@@ -215,11 +242,11 @@ public sealed class PlaytestLogger : MonoBehaviour
     private void RecordFallIfNeeded()
     {
         Vector2 position = GetCurrentPosition();
-        float threshold = useConfiguredFallYThreshold ? ConfiguredFallYThreshold : fallYThreshold;
+        float threshold = fallYThreshold;
         if (!fallRecorded && position.y <= threshold)
         {
             fallRecorded = true;
-            WritePositionRecord(PlaytestLogRecordTypes.Fall, position, flushImmediately: true);
+            WritePositionRecord(PlaytestLogRecordTypes.Fall, position);
             return;
         }
 
@@ -242,16 +269,16 @@ public sealed class PlaytestLogger : MonoBehaviour
         {
             type = PlaytestLogRecordTypes.Jump,
             time = Time.timeSinceLevelLoad,
-            scene = SceneManager.GetActiveScene().name,
+            scene = sessionSceneName,
             timestamp = DateTime.Now.ToString("o"),
-            player = source.name,
+            player = sessionPlayerName,
             x = position.x,
             y = position.y,
             angle = source.LastJumpAngle,
             power = source.LockedPower,
             impulseX = impulse.x,
             impulseY = impulse.y
-        }, flushImmediately: true);
+        });
     }
 
     private void HandleLanded(PlayerController source)
@@ -267,16 +294,16 @@ public sealed class PlaytestLogger : MonoBehaviour
         {
             type = PlaytestLogRecordTypes.Landing,
             time = Time.timeSinceLevelLoad,
-            scene = SceneManager.GetActiveScene().name,
+            scene = sessionSceneName,
             timestamp = DateTime.Now.ToString("o"),
-            player = source.name,
+            player = sessionPlayerName,
             x = position.x,
             y = position.y,
             angle = source.LastJumpAngle,
             power = source.LockedPower,
             impulseX = impulse.x,
             impulseY = impulse.y
-        }, flushImmediately: true);
+        });
     }
 
     private void HandleDebugJumpHistoryMoved(PlayerController source)
@@ -288,24 +315,24 @@ public sealed class PlaytestLogger : MonoBehaviour
 
         hasLastSamplePosition = false;
         nextSampleTime = 0f;
-        WritePositionRecord(PlaytestLogRecordTypes.PathBreak, GetCurrentPosition(), flushImmediately: true);
+        WritePositionRecord(PlaytestLogRecordTypes.PathBreak, GetCurrentPosition());
     }
 
-    private void WritePositionRecord(string type, Vector2 position, bool flushImmediately = false)
+    private void WritePositionRecord(string type, Vector2 position)
     {
         WriteRecord(new PlaytestLogRecord
         {
             type = type,
             time = Time.timeSinceLevelLoad,
-            scene = SceneManager.GetActiveScene().name,
+            scene = sessionSceneName,
             timestamp = DateTime.Now.ToString("o"),
-            player = player != null ? player.name : name,
+            player = sessionPlayerName,
             x = position.x,
             y = position.y
-        }, flushImmediately);
+        });
     }
 
-    private void WriteRecord(PlaytestLogRecord record, bool flushImmediately = false)
+    private void WriteRecord(PlaytestLogRecord record)
     {
         if (!sessionOpen || writer == null || record == null)
         {
@@ -315,10 +342,34 @@ public sealed class PlaytestLogger : MonoBehaviour
         try
         {
             writer.WriteLine(JsonUtility.ToJson(record));
-            if (flushImmediately)
-            {
-                writer.Flush();
-            }
+            bufferedRecordCount++;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"Playtest Logger: 로그 기록을 중단합니다. {exception.Message}");
+            AbortSession();
+            enabled = false;
+        }
+    }
+
+    private void FlushBufferedRecordsIfNeeded()
+    {
+        if (!sessionOpen || writer == null || bufferedRecordCount <= 0)
+        {
+            return;
+        }
+
+        bool reachedRecordLimit = bufferedRecordCount >= Mathf.Max(1, maxBufferedRecords);
+        if (!reachedRecordLimit && Time.realtimeSinceStartup < nextFlushTime)
+        {
+            return;
+        }
+
+        try
+        {
+            writer.Flush();
+            bufferedRecordCount = 0;
+            nextFlushTime = Time.realtimeSinceStartup + Mathf.Max(0.5f, flushInterval);
         }
         catch (Exception exception)
         {
@@ -342,6 +393,7 @@ public sealed class PlaytestLogger : MonoBehaviour
         }
 
         writer = null;
+        bufferedRecordCount = 0;
     }
 
     private Vector2 GetCurrentPosition()
@@ -366,6 +418,8 @@ public sealed class PlaytestLogger : MonoBehaviour
     {
         sampleInterval = Mathf.Max(0.02f, sampleInterval);
         minimumSampleDistance = Mathf.Max(0f, minimumSampleDistance);
+        flushInterval = Mathf.Max(0.5f, flushInterval);
+        maxBufferedRecords = Mathf.Max(1, maxBufferedRecords);
         fallResetMargin = Mathf.Max(0f, fallResetMargin);
     }
 }

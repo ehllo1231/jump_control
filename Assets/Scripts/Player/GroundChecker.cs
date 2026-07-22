@@ -27,15 +27,8 @@ public class GroundChecker : MonoBehaviour
         ConfigureFilter();
     }
 
-    private void Update()
-    {
-        CheckGroundedNow();
-    }
-
     public bool CheckGroundedNow()
     {
-        ConfigureFilter();
-
         GetGroundCheckArea(out Vector2 checkPosition, out Vector2 checkSize, out Bounds ownBounds, out bool hasOwnBounds);
         int hitCount = Physics2D.OverlapBox(checkPosition, checkSize, 0f, groundFilter, overlapResults);
 
@@ -161,6 +154,7 @@ public class GroundChecker : MonoBehaviour
     {
         checkRadius = Mathf.Max(0.01f, checkRadius);
         horizontalInset = Mathf.Max(0f, horizontalInset);
+        ConfigureFilter();
     }
 
     private void OnDrawGizmosSelected()

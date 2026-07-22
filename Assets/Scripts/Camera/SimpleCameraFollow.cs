@@ -6,6 +6,7 @@ using UnityEngine;
 [RequireComponent(typeof(Camera))]
 public class SimpleCameraFollow : MonoBehaviour
 {
+    private const float PositionTolerance = 0.0000000001f;
     public const int DefaultAssetsPixelsPerUnit = 16;
     public const int DefaultReferenceWidth = 384;
     public const int DefaultReferenceHeight = 216;
@@ -60,7 +61,10 @@ public class SimpleCameraFollow : MonoBehaviour
             cameraPosition = SnapToPixelGrid(cameraPosition, WorldUnitsPerScreenPixel);
         }
 
-        transform.position = cameraPosition;
+        if ((transform.position - cameraPosition).sqrMagnitude > PositionTolerance)
+        {
+            transform.position = cameraPosition;
+        }
     }
 
     public void SetTarget(Transform followTarget)
@@ -125,16 +129,30 @@ public class SimpleCameraFollow : MonoBehaviour
             return;
         }
 
-        CurrentPixelScale = CalculatePixelScale(
+        int pixelScale = CalculatePixelScale(
             screenWidth,
             screenHeight,
             referenceResolution.x,
             referenceResolution.y);
-        attachedCamera.orthographic = true;
-        attachedCamera.orthographicSize = CalculateOrthographicSize(
+        float orthographicSize = CalculateOrthographicSize(
             screenHeight,
             assetsPixelsPerUnit,
-            CurrentPixelScale);
+            pixelScale);
+
+        if (CurrentPixelScale != pixelScale)
+        {
+            CurrentPixelScale = pixelScale;
+        }
+
+        if (!attachedCamera.orthographic)
+        {
+            attachedCamera.orthographic = true;
+        }
+
+        if (!Mathf.Approximately(attachedCamera.orthographicSize, orthographicSize))
+        {
+            attachedCamera.orthographicSize = orthographicSize;
+        }
     }
 
     private void CacheCamera()
