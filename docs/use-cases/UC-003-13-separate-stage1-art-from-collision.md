@@ -1,11 +1,13 @@
 # UC-003-13: Stage1 아트와 충돌 구조 분리
 
 - 상태: Verified
-- 마지막 갱신일: 2026-07-17
+- 마지막 갱신일: 2026-07-26
 
 ## 목적
 
 맵 제작자가 여러 Platform으로 조립한 Stage1 충돌 구조와 최종 스프라이트 디자인을 독립적으로 배치하여, 하나의 아트가 여러 Collider를 자연스럽게 덮도록 제작한다.
+
+> 현재 Stage1 콘텐츠는 [UC-003-17](./UC-003-17-reset-stage1-for-redesign.md)에 따라 `Floor` 충돌과 대응 가이드만 남긴 상태이며, 이 문서의 역할별 계층 구조는 계속 사용한다.
 
 ## 액터
 
@@ -61,6 +63,7 @@
 - 씬을 다시 연 뒤 Platform 100개가 충돌 전용이고, Collider 171개와 Guide Renderer 146개가 유지되며, 가이드의 Sprite와 Mesh가 모두 영구 에셋을 참조함을 확인했다.
 - Preview Scene에서 새 Platform은 기존처럼 Visual 표시가 활성화되는 기본값임을 확인했다.
 - Unity 6000.3.1f1 스크립트 컴파일을 완료했으며 최종 컴파일 오류가 발생하지 않았다.
+- 2026-07-26 재디자인 초기화 후에도 `Collision`, `BackgroundDecor`, `ForegroundDecor/StageArt`, `ForegroundDecor/CollisionGuides`, `Lighting` 계층을 유지했다. 현재 `Collision`과 `CollisionGuides`에는 각각 `Floor` 하나만 남아 있다.
 
 ## 미결 질문
 

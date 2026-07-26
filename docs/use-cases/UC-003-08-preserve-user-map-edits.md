@@ -1,7 +1,7 @@
 # UC-003-08: 코드 수정 중 사용자 맵 구성 보존
 
 - 상태: Implemented
-- 마지막 갱신일: 2026-07-17
+- 마지막 갱신일: 2026-07-26
 
 ## 목적
 
@@ -70,6 +70,7 @@
 - 2026-07-17 `Platform_01 (11)` 위의 불필요 충돌 보고를 조사해, 별도 중복 Collider가 아니라 실제 `BoxCollider2D` 높이 `8.645620`이 가이드 높이 `7.612145`보다 큰 상태임을 확인했다.
 - `Stage1/Collision/Platform_01 (11)`의 Collider 높이만 `7.6121454`로 맞춰 위·아래의 보이지 않는 돌출 구간을 제거했다. 같은 이름의 `CollisionGuides`, Transform, Collider 중심·너비와 주변 Collider는 유지했다.
 - 수정 직전 백업 `MVPJumpScene-20260717_205800-before-play.unity`와 메인 씬을 비교해 `Platform_01 (11)`의 `BoxCollider2D.m_Size.y` 한 값만 변경됐음을 확인했다. Unity에서 수정 후 Collider Bounds와 가이드 Bounds가 일치하는 것도 직접 검증했다.
+- 2026-07-26 Stage1 전체 재디자인 초기화 전에 현재 씬을 기준점 커밋 `2cc8197`과 `MVPJumpScene-20260726-before-stage1-redesign.unity`로 보존했다.
 
 ## 미결 질문
 

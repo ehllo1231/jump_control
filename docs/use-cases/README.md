@@ -28,15 +28,16 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 | UC-003-05 | Play Mode 생성 Platform 유지 | Implemented | [문서](./UC-003-05-persist-play-mode-platforms.md) | 2026-07-17 |
 | UC-003-06 | 점프 도달 후보 표시 | Implemented | [문서](./UC-003-06-show-jump-reachability.md) | 2026-06-26 |
 | UC-003-07 | 기본 Platform 색상 일관성 유지 | Implemented | [문서](./UC-003-07-keep-platform-color-consistent.md) | 2026-07-17 |
-| UC-003-08 | 코드 수정 중 사용자 맵 구성 보존 | Implemented | [문서](./UC-003-08-preserve-user-map-edits.md) | 2026-07-17 |
+| UC-003-08 | 코드 수정 중 사용자 맵 구성 보존 | Implemented | [문서](./UC-003-08-preserve-user-map-edits.md) | 2026-07-26 |
 | UC-003-09 | 삼각형 Platform 생성 | Implemented | [문서](./UC-003-09-create-triangle-platform.md) | 2026-07-17 |
 | UC-003-10 | Platform 회전 조정 | Implemented | [문서](./UC-003-10-rotate-platform.md) | 2026-06-22 |
 | UC-003-11 | 직각 삼각형 Platform 생성 및 편집 | Implemented | [문서](./UC-003-11-create-right-triangle-platform.md) | 2026-07-17 |
 | UC-003-12 | Stage1 구조물 계층 정리 | Superseded | [문서](./UC-003-12-organize-stage-hierarchy.md) | 2026-07-17 |
-| UC-003-13 | Stage1 아트와 충돌 구조 분리 | Verified | [문서](./UC-003-13-separate-stage1-art-from-collision.md) | 2026-07-17 |
+| UC-003-13 | Stage1 아트와 충돌 구조 분리 | Verified | [문서](./UC-003-13-separate-stage1-art-from-collision.md) | 2026-07-26 |
 | UC-003-14 | Stage1 기본 스프라이트 디자인 테스트 적용 | Superseded | [문서](./UC-003-14-apply-stage1-basic-sprite-test.md) | 2026-07-17 |
-| UC-003-15 | Stage1 큰 삼각형 시각 경계와 충돌 정렬 | Verified | [문서](./UC-003-15-align-stage1-large-triangle-collision.md) | 2026-07-17 |
-| UC-003-16 | Stage1 분할 디자인 파츠 적용 | Verified | [문서](./UC-003-16-apply-stage1-design-section.md) | 2026-07-20 |
+| UC-003-15 | Stage1 큰 삼각형 시각 경계와 충돌 정렬 | Superseded | [문서](./UC-003-15-align-stage1-large-triangle-collision.md) | 2026-07-26 |
+| UC-003-16 | Stage1 분할 디자인 파츠 적용 | Superseded | [문서](./UC-003-16-apply-stage1-design-section.md) | 2026-07-26 |
+| UC-003-17 | Stage1 재디자인을 위한 맵 초기화 | Verified | [문서](./UC-003-17-reset-stage1-for-redesign.md) | 2026-07-26 |
 | UC-004-01 | 배경음악 일시정지 지점 재개 | Implemented | [문서](./UC-004-01-resume-background-music.md) | 2026-07-12 |
 | UC-004-02 | Android 빌드 배경음악 재생 | Implemented | [문서](./UC-004-02-play-background-music-on-android.md) | 2026-07-12 |
 | UC-004-03 | 배경음악 설정 전환 | Implemented | [문서](./UC-004-03-toggle-background-music-setting.md) | 2026-07-12 |
