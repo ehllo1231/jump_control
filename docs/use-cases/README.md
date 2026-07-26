@@ -38,6 +38,7 @@ ID는 같은 기능군끼리 같은 세 자리 그룹 번호를 공유한다. �
 | UC-003-15 | Stage1 큰 삼각형 시각 경계와 충돌 정렬 | Superseded | [문서](./UC-003-15-align-stage1-large-triangle-collision.md) | 2026-07-26 |
 | UC-003-16 | Stage1 분할 디자인 파츠 적용 | Superseded | [문서](./UC-003-16-apply-stage1-design-section.md) | 2026-07-26 |
 | UC-003-17 | Stage1 재디자인을 위한 맵 초기화 | Verified | [문서](./UC-003-17-reset-stage1-for-redesign.md) | 2026-07-26 |
+| UC-003-18 | Stage1 Floor 시각 경계와 충돌 정렬 | Implemented | [문서](./UC-003-18-align-stage1-floor-collision.md) | 2026-07-26 |
 | UC-004-01 | 배경음악 일시정지 지점 재개 | Implemented | [문서](./UC-004-01-resume-background-music.md) | 2026-07-12 |
 | UC-004-02 | Android 빌드 배경음악 재생 | Implemented | [문서](./UC-004-02-play-background-music-on-android.md) | 2026-07-12 |
 | UC-004-03 | 배경음악 설정 전환 | Implemented | [문서](./UC-004-03-toggle-background-music-setting.md) | 2026-07-12 |
